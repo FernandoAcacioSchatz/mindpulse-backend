@@ -7,5 +7,6 @@ httpx
 python-dotenv
 scikit-learn
 joblib
+pandas
 numpy
 pyjwt[crypto]
