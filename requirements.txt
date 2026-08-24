@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+apscheduler
+supabase
+openai
+httpx
+python-dotenv
+scikit-learn
+joblib
+numpy
+pyjwt[crypto]

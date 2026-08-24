@@ -1,0 +1,491 @@
+frase,categoria,sentimento
+"Ao longo do tempo, nunca presenciei nem sofri assédio no ambiente de trabalho",assedio,bom
+Me sinto à vontade para expressar minha opinião,seguranca_psicologica,bom
+"Ultimamente, meu chefe nunca está disponível quando preciso",lideranca,ruim
+"Ultimamente, sinto orgulho de como minha entrega é vista aqui",reconhecimento,bom
+"Para ser honesto, as informações chegam confusas ou atrasadas",comunicacao,ruim
+"Sinceramente, sinto apoio genuíno da minha chefia direta",lideranca,bom
+Erros são punidos duramente por aqui,seguranca_psicologica,ruim
+"Ultimamente, estou constantemente cansado e sem energia",bem_estar,ruim
+"Na minha experiência, tenho tempo suficiente para fazer um bom trabalho",carga_trabalho,bom
+"No meu dia a dia, não preciso levar trabalho para casa",carga_trabalho,bom
+"Ultimamente, meu gestor me dá autonomia com responsabilidade",lideranca,bom
+"No geral, sinto que posso ser eu mesmo no trabalho",seguranca_psicologica,bom
+Sou recompensado de forma justa pelos resultados,reconhecimento,bom
+"No geral, as demandas são impossíveis de cumprir no prazo",carga_trabalho,ruim
+"No geral, sinto apoio genuíno da minha chefia direta",lideranca,bom
+"Ultimamente, me sinto à vontade para expressar minha opinião",seguranca_psicologica,bom
+"No geral, meu líder me apoia quando eu preciso",lideranca,bom
+"Ao longo do tempo, não confio nas decisões da liderança",lideranca,ruim
+"De forma geral, meu gestor microgerencia tudo sem confiar na equipe",lideranca,ruim
+"Ao longo do tempo, as demandas são razoáveis para o meu cargo",carga_trabalho,bom
+"Sinceramente, tenho medo de expressar minha opinião no trabalho",seguranca_psicologica,ruim
+"Na minha experiência, não me sinto seguro em relação a esse tema",assedio,ruim
+"Recentemente, meu nível de estresse está sob controle",bem_estar,bom
+"Sinceramente, tenho medo de discordar de qualquer decisão",seguranca_psicologica,ruim
+"Ao longo do tempo, meu nível de estresse está fora de controle",bem_estar,ruim
+Meu nível de estresse está fora de controle,bem_estar,ruim
+"Ao longo do tempo, não consigo terminar tudo dentro do horário",carga_trabalho,ruim
+"No meu dia a dia, nunca vi conduta inadequada na empresa",assedio,bom
+"No meu dia a dia, já me senti desrespeitado por um colega ou chefe",assedio,ruim
+"De forma geral, meus colegas reconhecem minhas contribuições",reconhecimento,bom
+"No geral, recebo reconhecimento quando faço um bom trabalho",reconhecimento,bom
+"No geral, meus colegas reconhecem minhas contribuições",reconhecimento,bom
+"No geral, me sinto à vontade para expressar minha opinião",seguranca_psicologica,bom
+"Sinceramente, tenho dormido mal por causa do trabalho",bem_estar,ruim
+"Recentemente, sinto que a empresa leva esse assunto a sério",assedio,bom
+"No meu dia a dia, não me sinto seguro em relação a esse tema",assedio,ruim
+"De forma geral, me sinto seguro em relação a esse tema aqui",assedio,bom
+"De forma geral, sinto que nunca tenho tempo suficiente",carga_trabalho,ruim
+"De forma geral, tenho medo de discordar de qualquer decisão",seguranca_psicologica,ruim
+"Sinceramente, já ouvi comentário de conotação sexual no ambiente",assedio,ruim
+"De forma geral, as reuniões são objetivas e produtivas",comunicacao,bom
+"Ultimamente, meus resultados passam despercebidos pela gestão",reconhecimento,ruim
+"Na minha experiência, existem comentários impróprios que me incomodam",assedio,ruim
+"No meu dia a dia, a comunicação entre as equipes funciona bem",comunicacao,bom
+"Recentemente, não consigo organizar minhas entregas da semana",carga_trabalho,ruim
+"No geral, meu gestor microgerencia tudo sem confiar na equipe",lideranca,ruim
+Posso admitir um erro sem medo de punição,seguranca_psicologica,bom
+"No meu dia a dia, falta comunicação entre os setores",comunicacao,ruim
+As demandas são impossíveis de cumprir no prazo,carga_trabalho,ruim
+"Para ser honesto, meu volume de tarefas está fora de controle",carga_trabalho,ruim
+"De forma geral, trabalho muito e não sou valorizado por isso",reconhecimento,ruim
+Já presenciei comportamento inadequado no ambiente,assedio,ruim
+"No meu dia a dia, o ambiente é respeitoso entre todos os colegas",assedio,bom
+Trabalho até tarde quase todos os dias,carga_trabalho,ruim
+"Na minha experiência, tenho pausas suficientes durante o dia",bem_estar,bom
+"Na minha experiência, não consigo organizar minhas entregas da semana",carga_trabalho,ruim
+"De forma geral, as informações chegam confusas ou atrasadas",comunicacao,ruim
+"Sinceramente, meu volume de tarefas está fora de controle",carga_trabalho,ruim
+"Ao longo do tempo, meu chefe nunca está disponível quando preciso",lideranca,ruim
+"No meu dia a dia, recebo reconhecimento quando faço um bom trabalho",reconhecimento,bom
+"Para ser honesto, não confio nas decisões da liderança",lideranca,ruim
+"Sinceramente, as reuniões são desorganizadas e sem objetivo",comunicacao,ruim
+"Ao longo do tempo, sinto que meu esforço não vale a pena aqui",reconhecimento,ruim
+"Ao longo do tempo, recebo feedback claro sobre meu trabalho",comunicacao,bom
+"Na minha experiência, falta comunicação entre os setores",comunicacao,ruim
+"Ultimamente, me sinto bem fisicamente e mentalmente no trabalho",bem_estar,bom
+"Para ser honesto, sinto que esse assunto não é levado a sério aqui",assedio,ruim
+Meu nível de estresse está sob controle,bem_estar,bom
+"De forma geral, sinto que esse assunto não é levado a sério aqui",assedio,ruim
+Meu gestor microgerencia tudo sem confiar na equipe,lideranca,ruim
+Minhas ideias são ignoradas ou ridicularizadas,seguranca_psicologica,ruim
+"No geral, minhas ideias são ouvidas com respeito",seguranca_psicologica,bom
+"De forma geral, tenho pausas suficientes durante o dia",bem_estar,bom
+"No meu dia a dia, tenho pausas suficientes durante o dia",bem_estar,bom
+"Ao longo do tempo, nunca ouvi comentário impróprio no ambiente",assedio,bom
+"Recentemente, consigo organizar bem minhas entregas da semana",carga_trabalho,bom
+Não confio nas decisões da liderança,lideranca,ruim
+"Recentemente, evito fazer perguntas com medo de parecer incompetente",seguranca_psicologica,ruim
+"Sinceramente, nunca vi conduta inadequada na empresa",assedio,bom
+"No geral, não consigo desconectar do trabalho nunca",bem_estar,ruim
+"Ultimamente, nunca vi conduta inadequada na empresa",assedio,bom
+"Ao longo do tempo, não tenho medo de discordar da liderança",seguranca_psicologica,bom
+Consigo desconectar do trabalho nos fins de semana,bem_estar,bom
+"Para ser honesto, meu gestor microgerencia tudo sem confiar na equipe",lideranca,ruim
+"Ultimamente, me sinto seguro para levantar um problema",seguranca_psicologica,bom
+"Recentemente, sinto apoio genuíno da minha chefia direta",lideranca,bom
+Meu esforço nunca é reconhecido,reconhecimento,ruim
+Meus resultados passam despercebidos pela gestão,reconhecimento,ruim
+"No meu dia a dia, já fui elogiado publicamente pelo meu trabalho",reconhecimento,bom
+"Recentemente, as reuniões são desorganizadas e sem objetivo",comunicacao,ruim
+"No meu dia a dia, não me sinto seguro para levantar um problema",seguranca_psicologica,ruim
+Meu líder me apoia quando eu preciso,lideranca,bom
+Sinto que preciso me policiar o tempo todo,seguranca_psicologica,ruim
+As prioridades são bem explicadas pela gestão,comunicacao,bom
+"Ao longo do tempo, as informações chegam confusas ou atrasadas",comunicacao,ruim
+Trabalho muito e não sou valorizado por isso,reconhecimento,ruim
+"Para ser honesto, sinto que não faço diferença nenhuma aqui",reconhecimento,ruim
+"Para ser honesto, posso admitir um erro sem medo de punição",seguranca_psicologica,bom
+"Na minha experiência, minhas ideias são ignoradas ou ridicularizadas",seguranca_psicologica,ruim
+"Recentemente, não confio nas decisões da liderança",lideranca,ruim
+"Para ser honesto, as informações chegam claras até mim",comunicacao,bom
+"Na minha experiência, meu gestor está sempre disponível para ajudar",lideranca,bom
+Me sinto seguro para levantar um problema,seguranca_psicologica,bom
+"Para ser honesto, tenho medo de discordar de qualquer decisão",seguranca_psicologica,ruim
+"Ultimamente, as demandas são razoáveis para o meu cargo",carga_trabalho,bom
+Meu bem-estar tem piorado bastante ultimamente,bem_estar,ruim
+"Sinceramente, posso fazer perguntas sem medo de parecer incompetente",seguranca_psicologica,bom
+"Sinceramente, durmo bem e não penso no trabalho fora do horário",bem_estar,bom
+"Recentemente, não consigo desconectar do trabalho nunca",bem_estar,ruim
+Sinto que a empresa leva esse assunto a sério,assedio,bom
+"Sinceramente, sinto que a empresa leva esse assunto a sério",assedio,bom
+"Na minha experiência, me sinto bem fisicamente e mentalmente no trabalho",bem_estar,bom
+Nunca ouvi comentário impróprio no ambiente,assedio,bom
+"De forma geral, consigo manter equilíbrio entre vida pessoal e trabalho",bem_estar,bom
+Sinto que esse assunto não é levado a sério aqui,assedio,ruim
+Sinto que posso ser eu mesmo no trabalho,seguranca_psicologica,bom
+"Recentemente, meu chefe nunca está disponível quando preciso",lideranca,ruim
+"Para ser honesto, consigo organizar bem minhas entregas da semana",carga_trabalho,bom
+"Sinceramente, trabalho muito e não sou valorizado por isso",reconhecimento,ruim
+Me sinto bem fisicamente e mentalmente no trabalho,bem_estar,bom
+"No geral, recebo feedback claro sobre meu trabalho",comunicacao,bom
+"De forma geral, erros são punidos duramente por aqui",seguranca_psicologica,ruim
+"Ao longo do tempo, recebo orientação clara do meu chefe",lideranca,bom
+"Ultimamente, sinto que não faço diferença nenhuma aqui",reconhecimento,ruim
+Já fui elogiado publicamente pelo meu trabalho,reconhecimento,bom
+Sinto falta de orientação da minha chefia,lideranca,ruim
+"Ultimamente, tenho dormido mal por causa do trabalho",bem_estar,ruim
+"Ultimamente, consigo desconectar do trabalho nos fins de semana",bem_estar,bom
+"Sinceramente, consigo manter equilíbrio entre vida pessoal e trabalho",bem_estar,bom
+"Ao longo do tempo, meu volume de tarefas é administrável",carga_trabalho,bom
+"Sinceramente, não recebo feedback sobre meu desempenho",comunicacao,ruim
+"De forma geral, estou sobrecarregado com tarefas demais",carga_trabalho,ruim
+Meu chefe nunca está disponível quando preciso,lideranca,ruim
+"No meu dia a dia, me sinto seguro em relação a esse tema aqui",assedio,bom
+"Recentemente, recebo reconhecimento quando faço um bom trabalho",reconhecimento,bom
+"Sinceramente, meu gestor me dá autonomia com responsabilidade",lideranca,bom
+"No meu dia a dia, consigo organizar bem minhas entregas da semana",carga_trabalho,bom
+"Na minha experiência, já me senti desrespeitado por um colega ou chefe",assedio,ruim
+"Ultimamente, fico sabendo de mudanças importantes de última hora",comunicacao,ruim
+Sei exatamente o que é esperado de mim,comunicacao,bom
+"Para ser honesto, minha liderança é ausente no dia a dia",lideranca,ruim
+"Para ser honesto, me sinto à vontade para expressar minha opinião",seguranca_psicologica,bom
+Minha carga de trabalho é equilibrada,carga_trabalho,bom
+"Para ser honesto, tenho tempo suficiente para fazer um bom trabalho",carga_trabalho,bom
+"No meu dia a dia, estou constantemente cansado e sem energia",bem_estar,ruim
+"No geral, nunca sei o que está acontecendo na empresa",comunicacao,ruim
+"No meu dia a dia, evito fazer perguntas com medo de parecer incompetente",seguranca_psicologica,ruim
+"Ao longo do tempo, sinto ansiedade só de pensar em vir trabalhar",bem_estar,ruim
+"Para ser honesto, meu nível de estresse está sob controle",bem_estar,bom
+"No geral, as demandas são razoáveis para o meu cargo",carga_trabalho,bom
+"No geral, me sinto bem fisicamente e mentalmente no trabalho",bem_estar,bom
+"Ao longo do tempo, meu trabalho é valorizado pela empresa",reconhecimento,bom
+"Na minha experiência, as informações chegam claras até mim",comunicacao,bom
+"No geral, minha carga de trabalho é equilibrada",carga_trabalho,bom
+Me sinto disposto na maior parte dos dias,bem_estar,bom
+"Ao longo do tempo, me sinto seguro em relação a esse tema aqui",assedio,bom
+Sinto que meu trabalho é invisível para a empresa,reconhecimento,ruim
+"Na minha experiência, meu gestor me dá autonomia com responsabilidade",lideranca,bom
+"No geral, tenho medo de discordar de qualquer decisão",seguranca_psicologica,ruim
+"No geral, tenho medo de expressar minha opinião no trabalho",seguranca_psicologica,ruim
+"Ultimamente, existem comentários impróprios que me incomodam",assedio,ruim
+"Ultimamente, minha liderança reconhece o esforço da equipe",lideranca,bom
+"Para ser honesto, me sinto disposto na maior parte dos dias",bem_estar,bom
+"Na minha experiência, consigo organizar bem minhas entregas da semana",carga_trabalho,bom
+"Para ser honesto, não me sinto seguro em relação a esse tema",assedio,ruim
+"Ao longo do tempo, evito fazer perguntas com medo de parecer incompetente",seguranca_psicologica,ruim
+"Ao longo do tempo, consigo terminar minhas tarefas dentro do horário normal",carga_trabalho,bom
+"Recentemente, sou informado sobre mudanças com antecedência",comunicacao,bom
+"De forma geral, não tenho medo de discordar da liderança",seguranca_psicologica,bom
+"Ultimamente, falta comunicação entre os setores",comunicacao,ruim
+"No meu dia a dia, existem comentários impróprios que me incomodam",assedio,ruim
+"Recentemente, estou constantemente cansado e sem energia",bem_estar,ruim
+"No geral, sou informado sobre mudanças com antecedência",comunicacao,bom
+"No meu dia a dia, sinto que nunca tenho tempo suficiente",carga_trabalho,ruim
+"No meu dia a dia, estou sobrecarregado com tarefas demais",carga_trabalho,ruim
+As demandas são razoáveis para o meu cargo,carga_trabalho,bom
+"Para ser honesto, não consigo descansar nem nos fins de semana",bem_estar,ruim
+"Recentemente, meu volume de tarefas é administrável",carga_trabalho,bom
+"Na minha experiência, recebo orientação clara do meu chefe",lideranca,bom
+"No meu dia a dia, consigo desconectar do trabalho nos fins de semana",bem_estar,bom
+"Sinceramente, sinto ansiedade só de pensar em vir trabalhar",bem_estar,ruim
+Não consigo organizar minhas entregas da semana,carga_trabalho,ruim
+Não consigo terminar tudo dentro do horário,carga_trabalho,ruim
+Não tenho medo de discordar da liderança,seguranca_psicologica,bom
+Minhas ideias são ouvidas com respeito,seguranca_psicologica,bom
+"Na minha experiência, estou constantemente cansado e sem energia",bem_estar,ruim
+Nunca vi conduta inadequada na empresa,assedio,bom
+"De forma geral, sinto que a chefia não está do meu lado",lideranca,ruim
+"Recentemente, posso admitir um erro sem medo de punição",seguranca_psicologica,bom
+"No meu dia a dia, durmo bem e não penso no trabalho fora do horário",bem_estar,bom
+"Na minha experiência, não consigo terminar tudo dentro do horário",carga_trabalho,ruim
+"No geral, meu chefe nunca está disponível quando preciso",lideranca,ruim
+"Para ser honesto, me sinto bem fisicamente e mentalmente no trabalho",bem_estar,bom
+"No meu dia a dia, meu gestor está sempre disponível para ajudar",lideranca,bom
+"Sinceramente, sinto orgulho de como minha entrega é vista aqui",reconhecimento,bom
+"Sinceramente, já presenciei comportamento inadequado no ambiente",assedio,ruim
+Consigo organizar bem minhas entregas da semana,carga_trabalho,bom
+"De forma geral, falta comunicação entre os setores",comunicacao,ruim
+"Ao longo do tempo, minha liderança reconhece o esforço da equipe",lideranca,bom
+"No meu dia a dia, sei exatamente o que é esperado de mim",comunicacao,bom
+"Para ser honesto, minha carga de trabalho é equilibrada",carga_trabalho,bom
+"Na minha experiência, não confio nas decisões da liderança",lideranca,ruim
+"De forma geral, as reuniões são desorganizadas e sem objetivo",comunicacao,ruim
+"Recentemente, nunca presenciei nem sofri assédio no ambiente de trabalho",assedio,bom
+"Ao longo do tempo, já ouvi comentário de conotação sexual no ambiente",assedio,ruim
+"Na minha experiência, me sinto seguro em relação a esse tema aqui",assedio,bom
+"De forma geral, nunca vi conduta inadequada na empresa",assedio,bom
+"Recentemente, não preciso levar trabalho para casa",carga_trabalho,bom
+"De forma geral, as prioridades são bem explicadas pela gestão",comunicacao,bom
+"Na minha experiência, me sinto disposto na maior parte dos dias",bem_estar,bom
+Tenho medo de expressar minha opinião no trabalho,seguranca_psicologica,ruim
+"Ultimamente, posso fazer perguntas sem medo de parecer incompetente",seguranca_psicologica,bom
+"De forma geral, já ouvi comentário de conotação sexual no ambiente",assedio,ruim
+As informações chegam confusas ou atrasadas,comunicacao,ruim
+"Recentemente, meu nível de estresse está fora de controle",bem_estar,ruim
+"Na minha experiência, meu nível de estresse está sob controle",bem_estar,bom
+Sinto ansiedade só de pensar em vir trabalhar,bem_estar,ruim
+"Na minha experiência, recebo feedback claro sobre meu trabalho",comunicacao,bom
+"Recentemente, trabalho até tarde quase todos os dias",carga_trabalho,ruim
+"Ao longo do tempo, consigo desconectar do trabalho nos fins de semana",bem_estar,bom
+"Ao longo do tempo, sinto que nunca tenho tempo suficiente",carga_trabalho,ruim
+"No geral, minha liderança reconhece o esforço da equipe",lideranca,bom
+"De forma geral, nunca ouvi comentário impróprio no ambiente",assedio,bom
+"No meu dia a dia, meus colegas reconhecem minhas contribuições",reconhecimento,bom
+"Na minha experiência, erros são punidos duramente por aqui",seguranca_psicologica,ruim
+"Ao longo do tempo, as reuniões são desorganizadas e sem objetivo",comunicacao,ruim
+As prioridades mudam sem nenhum aviso,comunicacao,ruim
+"Para ser honesto, meus resultados passam despercebidos pela gestão",reconhecimento,ruim
+"Recentemente, meu trabalho é valorizado pela empresa",reconhecimento,bom
+"De forma geral, minha liderança é ausente no dia a dia",lideranca,ruim
+"Recentemente, nunca recebo elogio nem feedback positivo",reconhecimento,ruim
+"Ultimamente, recebo feedback claro sobre meu trabalho",comunicacao,bom
+"No geral, tenho tempo suficiente para fazer um bom trabalho",carga_trabalho,bom
+Não recebo feedback sobre meu desempenho,comunicacao,ruim
+"Ao longo do tempo, as prioridades mudam sem nenhum aviso",comunicacao,ruim
+"De forma geral, nunca sei o que está acontecendo na empresa",comunicacao,ruim
+Sinto que meu esforço é notado pela gestão,reconhecimento,bom
+"Ultimamente, sinto que posso ser eu mesmo no trabalho",seguranca_psicologica,bom
+"No geral, consigo terminar minhas tarefas dentro do horário normal",carga_trabalho,bom
+"Recentemente, meu líder me apoia quando eu preciso",lideranca,bom
+"De forma geral, nunca recebo elogio nem feedback positivo",reconhecimento,ruim
+"No geral, minhas ideias são ignoradas ou ridicularizadas",seguranca_psicologica,ruim
+"De forma geral, minhas ideias são ouvidas com respeito",seguranca_psicologica,bom
+"Na minha experiência, minha carga de trabalho é equilibrada",carga_trabalho,bom
+"Recentemente, meu esforço nunca é reconhecido",reconhecimento,ruim
+Nunca sei o que está acontecendo na empresa,comunicacao,ruim
+"Sinceramente, confio nas decisões da minha liderança",lideranca,bom
+Sinto que não faço diferença nenhuma aqui,reconhecimento,ruim
+Minha liderança reconhece o esforço da equipe,lideranca,bom
+"Sinceramente, sei exatamente o que é esperado de mim",comunicacao,bom
+"Recentemente, não tenho medo de discordar da liderança",seguranca_psicologica,bom
+"De forma geral, não me sinto seguro em relação a esse tema",assedio,ruim
+O ambiente é respeitoso entre todos os colegas,assedio,bom
+"Ultimamente, sinto que meu esforço não vale a pena aqui",reconhecimento,ruim
+"Ultimamente, recebo reconhecimento quando faço um bom trabalho",reconhecimento,bom
+"De forma geral, não consigo descansar nem nos fins de semana",bem_estar,ruim
+"Ao longo do tempo, sinto apoio genuíno da minha chefia direta",lideranca,bom
+"Ao longo do tempo, a comunicação entre as equipes funciona bem",comunicacao,bom
+"De forma geral, minhas ideias são ignoradas ou ridicularizadas",seguranca_psicologica,ruim
+Minha liderança é ausente no dia a dia,lideranca,ruim
+Recebo reconhecimento quando faço um bom trabalho,reconhecimento,bom
+"Ao longo do tempo, sinto que esse assunto não é levado a sério aqui",assedio,ruim
+"De forma geral, me sinto à vontade para expressar minha opinião",seguranca_psicologica,bom
+Não me sinto seguro para levantar um problema,seguranca_psicologica,ruim
+"Ao longo do tempo, estou sobrecarregado com tarefas demais",carga_trabalho,ruim
+"Recentemente, meu gestor está sempre disponível para ajudar",lideranca,bom
+Tenho dormido mal por causa do trabalho,bem_estar,ruim
+"No geral, já fui elogiado publicamente pelo meu trabalho",reconhecimento,bom
+"Recentemente, consigo terminar minhas tarefas dentro do horário normal",carga_trabalho,bom
+"No geral, consigo manter equilíbrio entre vida pessoal e trabalho",bem_estar,bom
+"Ultimamente, já fui elogiado publicamente pelo meu trabalho",reconhecimento,bom
+"Na minha experiência, meu gestor microgerencia tudo sem confiar na equipe",lideranca,ruim
+"Na minha experiência, já ouvi comentário de conotação sexual no ambiente",assedio,ruim
+"No meu dia a dia, meu gestor não me dá suporte nenhum",lideranca,ruim
+"Sinceramente, não me sinto seguro para levantar um problema",seguranca_psicologica,ruim
+"De forma geral, sinto que meu trabalho é invisível para a empresa",reconhecimento,ruim
+"No meu dia a dia, sinto falta de orientação da minha chefia",lideranca,ruim
+"Ultimamente, o ambiente é respeitoso entre todos os colegas",assedio,bom
+"Para ser honesto, não consigo terminar tudo dentro do horário",carga_trabalho,ruim
+"Ao longo do tempo, já vi alguém sendo tratado de forma abusiva aqui",assedio,ruim
+Recebo orientação clara do meu chefe,lideranca,bom
+"Para ser honesto, existem comentários impróprios que me incomodam",assedio,ruim
+"Sinceramente, não consigo descansar nem nos fins de semana",bem_estar,ruim
+"De forma geral, meus resultados passam despercebidos pela gestão",reconhecimento,ruim
+"Na minha experiência, minha liderança é ausente no dia a dia",lideranca,ruim
+"Recentemente, posso fazer perguntas sem medo de parecer incompetente",seguranca_psicologica,bom
+"Sinceramente, sinto que meu esforço é notado pela gestão",reconhecimento,bom
+"De forma geral, não recebo feedback sobre meu desempenho",comunicacao,ruim
+"Recentemente, as informações chegam confusas ou atrasadas",comunicacao,ruim
+A comunicação entre as equipes funciona bem,comunicacao,bom
+Meu volume de tarefas é administrável,carga_trabalho,bom
+"Recentemente, as reuniões são objetivas e produtivas",comunicacao,bom
+"De forma geral, não preciso levar trabalho para casa",carga_trabalho,bom
+Tenho medo de discordar de qualquer decisão,seguranca_psicologica,ruim
+"Na minha experiência, a comunicação entre as equipes funciona bem",comunicacao,bom
+"Para ser honesto, recebo orientação clara do meu chefe",lideranca,bom
+"Na minha experiência, sou recompensado de forma justa pelos resultados",reconhecimento,bom
+"Na minha experiência, não consigo desconectar do trabalho nunca",bem_estar,ruim
+"De forma geral, as demandas são impossíveis de cumprir no prazo",carga_trabalho,ruim
+"Ao longo do tempo, sinto que meu esforço é notado pela gestão",reconhecimento,bom
+"Ultimamente, já me senti desrespeitado por um colega ou chefe",assedio,ruim
+"Sinceramente, meu gestor não me dá suporte nenhum",lideranca,ruim
+"No geral, evito fazer perguntas com medo de parecer incompetente",seguranca_psicologica,ruim
+"Para ser honesto, sinto falta de orientação da minha chefia",lideranca,ruim
+"No meu dia a dia, minhas ideias são ouvidas com respeito",seguranca_psicologica,bom
+"Recentemente, as relações no trabalho são sempre profissionais",assedio,bom
+"No meu dia a dia, sinto que esse assunto não é levado a sério aqui",assedio,ruim
+"No geral, meu esforço nunca é reconhecido",reconhecimento,ruim
+"No meu dia a dia, meu bem-estar tem piorado bastante ultimamente",bem_estar,ruim
+"Recentemente, não recebo feedback sobre meu desempenho",comunicacao,ruim
+"No geral, meus resultados passam despercebidos pela gestão",reconhecimento,ruim
+"No geral, sinto que a empresa leva esse assunto a sério",assedio,bom
+"De forma geral, não consigo terminar tudo dentro do horário",carga_trabalho,ruim
+As reuniões são desorganizadas e sem objetivo,comunicacao,ruim
+"No meu dia a dia, sou informado sobre mudanças com antecedência",comunicacao,bom
+Sinto que a chefia não está do meu lado,lideranca,ruim
+"Recentemente, já me senti desrespeitado por um colega ou chefe",assedio,ruim
+"Ultimamente, estou sobrecarregado com tarefas demais",carga_trabalho,ruim
+"Para ser honesto, confio nas decisões da minha liderança",lideranca,bom
+"Na minha experiência, já presenciei comportamento inadequado no ambiente",assedio,ruim
+"No meu dia a dia, meu líder me apoia quando eu preciso",lideranca,bom
+"De forma geral, sinto que preciso me policiar o tempo todo",seguranca_psicologica,ruim
+"Para ser honesto, meu nível de estresse está fora de controle",bem_estar,ruim
+"Recentemente, sinto que não faço diferença nenhuma aqui",reconhecimento,ruim
+"Recentemente, tenho dormido mal por causa do trabalho",bem_estar,ruim
+"Recentemente, sou recompensado de forma justa pelos resultados",reconhecimento,bom
+"Sinceramente, as demandas são impossíveis de cumprir no prazo",carga_trabalho,ruim
+"No geral, as reuniões são objetivas e produtivas",comunicacao,bom
+"De forma geral, me sinto disposto na maior parte dos dias",bem_estar,bom
+Nunca recebo elogio nem feedback positivo,reconhecimento,ruim
+Meu volume de tarefas está fora de controle,carga_trabalho,ruim
+As relações no trabalho são sempre profissionais,assedio,bom
+"Na minha experiência, nunca ouvi comentário impróprio no ambiente",assedio,bom
+"Ao longo do tempo, confio nas decisões da minha liderança",lideranca,bom
+"De forma geral, já vi alguém sendo tratado de forma abusiva aqui",assedio,ruim
+"No meu dia a dia, as prioridades mudam sem nenhum aviso",comunicacao,ruim
+"Recentemente, as prioridades mudam sem nenhum aviso",comunicacao,ruim
+"Na minha experiência, sinto orgulho de como minha entrega é vista aqui",reconhecimento,bom
+"Para ser honesto, as prioridades são bem explicadas pela gestão",comunicacao,bom
+Não preciso levar trabalho para casa,carga_trabalho,bom
+"Na minha experiência, sinto que a empresa leva esse assunto a sério",assedio,bom
+"De forma geral, meu gestor não me dá suporte nenhum",lideranca,ruim
+"Para ser honesto, não tenho medo de discordar da liderança",seguranca_psicologica,bom
+"Ultimamente, tenho pausas suficientes durante o dia",bem_estar,bom
+"Ultimamente, minhas ideias são ignoradas ou ridicularizadas",seguranca_psicologica,ruim
+Nunca presenciei nem sofri assédio no ambiente de trabalho,assedio,bom
+"Ultimamente, já presenciei comportamento inadequado no ambiente",assedio,ruim
+Posso fazer perguntas sem medo de parecer incompetente,seguranca_psicologica,bom
+"Ao longo do tempo, não recebo feedback sobre meu desempenho",comunicacao,ruim
+"Recentemente, sinto que meu esforço não vale a pena aqui",reconhecimento,ruim
+"Para ser honesto, posso fazer perguntas sem medo de parecer incompetente",seguranca_psicologica,bom
+"No geral, já presenciei comportamento inadequado no ambiente",assedio,ruim
+"Ultimamente, nunca sei o que está acontecendo na empresa",comunicacao,ruim
+"Ao longo do tempo, me sinto seguro para levantar um problema",seguranca_psicologica,bom
+"De forma geral, sinto que meu esforço não vale a pena aqui",reconhecimento,ruim
+"No geral, sou recompensado de forma justa pelos resultados",reconhecimento,bom
+Confio nas decisões da minha liderança,lideranca,bom
+"Na minha experiência, sinto que meu trabalho é invisível para a empresa",reconhecimento,ruim
+"Sinceramente, meu bem-estar tem piorado bastante ultimamente",bem_estar,ruim
+"Para ser honesto, durmo bem e não penso no trabalho fora do horário",bem_estar,bom
+Já ouvi comentário de conotação sexual no ambiente,assedio,ruim
+"De forma geral, a comunicação entre as equipes funciona bem",comunicacao,bom
+"No meu dia a dia, as informações chegam claras até mim",comunicacao,bom
+"Ultimamente, consigo terminar minhas tarefas dentro do horário normal",carga_trabalho,bom
+Evito fazer perguntas com medo de parecer incompetente,seguranca_psicologica,ruim
+"No geral, nunca recebo elogio nem feedback positivo",reconhecimento,ruim
+"De forma geral, sou informado sobre mudanças com antecedência",comunicacao,bom
+"No meu dia a dia, me sinto seguro para levantar um problema",seguranca_psicologica,bom
+"Ao longo do tempo, as informações chegam claras até mim",comunicacao,bom
+Estou sobrecarregado com tarefas demais,carga_trabalho,ruim
+"Ao longo do tempo, não consigo organizar minhas entregas da semana",carga_trabalho,ruim
+"Para ser honesto, me sinto seguro para levantar um problema",seguranca_psicologica,bom
+"De forma geral, consigo desconectar do trabalho nos fins de semana",bem_estar,bom
+Meu gestor me dá autonomia com responsabilidade,lideranca,bom
+"De forma geral, as prioridades mudam sem nenhum aviso",comunicacao,ruim
+"Ultimamente, meu líder me apoia quando eu preciso",lideranca,bom
+"Ao longo do tempo, sinto que preciso me policiar o tempo todo",seguranca_psicologica,ruim
+Meus colegas reconhecem minhas contribuições,reconhecimento,bom
+"No geral, sinto falta de orientação da minha chefia",lideranca,ruim
+Sinto orgulho de como minha entrega é vista aqui,reconhecimento,bom
+"Na minha experiência, meu esforço nunca é reconhecido",reconhecimento,ruim
+Meu trabalho é valorizado pela empresa,reconhecimento,bom
+"Ao longo do tempo, sinto que a chefia não está do meu lado",lideranca,ruim
+"De forma geral, sinto que posso ser eu mesmo no trabalho",seguranca_psicologica,bom
+"No meu dia a dia, trabalho muito e não sou valorizado por isso",reconhecimento,ruim
+"Recentemente, sei exatamente o que é esperado de mim",comunicacao,bom
+"Ao longo do tempo, minhas ideias são ouvidas com respeito",seguranca_psicologica,bom
+"Ultimamente, não me sinto seguro para levantar um problema",seguranca_psicologica,ruim
+"Ultimamente, confio nas decisões da minha liderança",lideranca,bom
+"No meu dia a dia, sinto ansiedade só de pensar em vir trabalhar",bem_estar,ruim
+"No meu dia a dia, meu volume de tarefas está fora de controle",carga_trabalho,ruim
+"Na minha experiência, o ambiente é respeitoso entre todos os colegas",assedio,bom
+Sinto que nunca tenho tempo suficiente,carga_trabalho,ruim
+"Recentemente, meu gestor não me dá suporte nenhum",lideranca,ruim
+"Para ser honesto, trabalho até tarde quase todos os dias",carga_trabalho,ruim
+"De forma geral, fico sabendo de mudanças importantes de última hora",comunicacao,ruim
+"Para ser honesto, sinto que preciso me policiar o tempo todo",seguranca_psicologica,ruim
+"Ultimamente, minha carga de trabalho é equilibrada",carga_trabalho,bom
+Consigo manter equilíbrio entre vida pessoal e trabalho,bem_estar,bom
+Recebo feedback claro sobre meu trabalho,comunicacao,bom
+Meu gestor está sempre disponível para ajudar,lideranca,bom
+"No meu dia a dia, sinto que posso ser eu mesmo no trabalho",seguranca_psicologica,bom
+"Recentemente, sinto falta de orientação da minha chefia",lideranca,ruim
+"Ultimamente, meu nível de estresse está sob controle",bem_estar,bom
+"Sinceramente, não consigo desconectar do trabalho nunca",bem_estar,ruim
+Tenho tempo suficiente para fazer um bom trabalho,carga_trabalho,bom
+"Ultimamente, meu volume de tarefas está fora de controle",carga_trabalho,ruim
+"No meu dia a dia, meu esforço nunca é reconhecido",reconhecimento,ruim
+"Ao longo do tempo, posso admitir um erro sem medo de punição",seguranca_psicologica,bom
+"No meu dia a dia, sinto que meu esforço é notado pela gestão",reconhecimento,bom
+"Ultimamente, nunca ouvi comentário impróprio no ambiente",assedio,bom
+"No geral, não consigo organizar minhas entregas da semana",carga_trabalho,ruim
+"No meu dia a dia, as relações no trabalho são sempre profissionais",assedio,bom
+"No geral, sinto que a chefia não está do meu lado",lideranca,ruim
+Sinto apoio genuíno da minha chefia direta,lideranca,bom
+"Ultimamente, meu volume de tarefas é administrável",carga_trabalho,bom
+"Sinceramente, as relações no trabalho são sempre profissionais",assedio,bom
+"No meu dia a dia, já vi alguém sendo tratado de forma abusiva aqui",assedio,ruim
+Não consigo desconectar do trabalho nunca,bem_estar,ruim
+"No meu dia a dia, nunca recebo elogio nem feedback positivo",reconhecimento,ruim
+Não me sinto seguro em relação a esse tema,assedio,ruim
+Estou constantemente cansado e sem energia,bem_estar,ruim
+Falta comunicação entre os setores,comunicacao,ruim
+"Para ser honesto, já vi alguém sendo tratado de forma abusiva aqui",assedio,ruim
+"No meu dia a dia, meu gestor me dá autonomia com responsabilidade",lideranca,bom
+"No geral, meu volume de tarefas é administrável",carga_trabalho,bom
+"Ultimamente, meu trabalho é valorizado pela empresa",reconhecimento,bom
+"De forma geral, já fui elogiado publicamente pelo meu trabalho",reconhecimento,bom
+Sinto que meu esforço não vale a pena aqui,reconhecimento,ruim
+"De forma geral, meu bem-estar tem piorado bastante ultimamente",bem_estar,ruim
+Consigo terminar minhas tarefas dentro do horário normal,carga_trabalho,bom
+"Na minha experiência, nunca presenciei nem sofri assédio no ambiente de trabalho",assedio,bom
+"Para ser honesto, trabalho muito e não sou valorizado por isso",reconhecimento,ruim
+"Na minha experiência, fico sabendo de mudanças importantes de última hora",comunicacao,ruim
+"No meu dia a dia, sinto que preciso me policiar o tempo todo",seguranca_psicologica,ruim
+"Sinceramente, sinto que nunca tenho tempo suficiente",carga_trabalho,ruim
+"Ao longo do tempo, as reuniões são objetivas e produtivas",comunicacao,bom
+"No meu dia a dia, minha liderança é ausente no dia a dia",lideranca,ruim
+"No meu dia a dia, as prioridades são bem explicadas pela gestão",comunicacao,bom
+"No meu dia a dia, trabalho até tarde quase todos os dias",carga_trabalho,ruim
+"Recentemente, meus colegas reconhecem minhas contribuições",reconhecimento,bom
+"Recentemente, as demandas são razoáveis para o meu cargo",carga_trabalho,bom
+"Na minha experiência, consigo manter equilíbrio entre vida pessoal e trabalho",bem_estar,bom
+"No meu dia a dia, tenho medo de expressar minha opinião no trabalho",seguranca_psicologica,ruim
+Já me senti desrespeitado por um colega ou chefe,assedio,ruim
+"Ao longo do tempo, fico sabendo de mudanças importantes de última hora",comunicacao,ruim
+"Ao longo do tempo, meu bem-estar tem piorado bastante ultimamente",bem_estar,ruim
+"Na minha experiência, sei exatamente o que é esperado de mim",comunicacao,bom
+"Para ser honesto, sinto que meu trabalho é invisível para a empresa",reconhecimento,ruim
+"Na minha experiência, posso admitir um erro sem medo de punição",seguranca_psicologica,bom
+"Sinceramente, meu trabalho é valorizado pela empresa",reconhecimento,bom
+As reuniões são objetivas e produtivas,comunicacao,bom
+"De forma geral, meu gestor está sempre disponível para ajudar",lideranca,bom
+Me sinto seguro em relação a esse tema aqui,assedio,bom
+"Para ser honesto, as demandas são impossíveis de cumprir no prazo",carga_trabalho,ruim
+Não consigo descansar nem nos fins de semana,bem_estar,ruim
+"Ultimamente, as prioridades são bem explicadas pela gestão",comunicacao,bom
+Sou informado sobre mudanças com antecedência,comunicacao,bom
+Fico sabendo de mudanças importantes de última hora,comunicacao,ruim
+"Na minha experiência, nunca sei o que está acontecendo na empresa",comunicacao,ruim
+Já vi alguém sendo tratado de forma abusiva aqui,assedio,ruim
+"Sinceramente, trabalho até tarde quase todos os dias",carga_trabalho,ruim
+"Sinceramente, sinto que meu trabalho é invisível para a empresa",reconhecimento,ruim
+"Para ser honesto, não me sinto seguro para levantar um problema",seguranca_psicologica,ruim
+"No geral, tenho dormido mal por causa do trabalho",bem_estar,ruim
+"Para ser honesto, sinto que meu esforço é notado pela gestão",reconhecimento,bom
+"No geral, durmo bem e não penso no trabalho fora do horário",bem_estar,bom
+"Na minha experiência, minha liderança reconhece o esforço da equipe",lideranca,bom
+As informações chegam claras até mim,comunicacao,bom
+Existem comentários impróprios que me incomodam,assedio,ruim
+"Para ser honesto, sou recompensado de forma justa pelos resultados",reconhecimento,bom
+"Na minha experiência, sinto ansiedade só de pensar em vir trabalhar",bem_estar,ruim
+"Na minha experiência, sinto que não faço diferença nenhuma aqui",reconhecimento,ruim
+"Ao longo do tempo, sinto orgulho de como minha entrega é vista aqui",reconhecimento,bom
+"Ultimamente, recebo orientação clara do meu chefe",lideranca,bom
+"Na minha experiência, tenho medo de expressar minha opinião no trabalho",seguranca_psicologica,ruim
+"Ao longo do tempo, erros são punidos duramente por aqui",seguranca_psicologica,ruim
+"Ultimamente, não preciso levar trabalho para casa",carga_trabalho,bom
+Durmo bem e não penso no trabalho fora do horário,bem_estar,bom
+"Ultimamente, sinto que a chefia não está do meu lado",lideranca,ruim
+"De forma geral, nunca presenciei nem sofri assédio no ambiente de trabalho",assedio,bom
+"Na minha experiência, não consigo descansar nem nos fins de semana",bem_estar,ruim
+"No geral, erros são punidos duramente por aqui",seguranca_psicologica,ruim
+"Recentemente, tenho tempo suficiente para fazer um bom trabalho",carga_trabalho,bom
+"Ultimamente, me sinto disposto na maior parte dos dias",bem_estar,bom
+Tenho pausas suficientes durante o dia,bem_estar,bom
+"Na minha experiência, as relações no trabalho são sempre profissionais",assedio,bom
+"De forma geral, o ambiente é respeitoso entre todos os colegas",assedio,bom
+"Sinceramente, meu nível de estresse está fora de controle",bem_estar,ruim
+Meu gestor não me dá suporte nenhum,lideranca,ruim

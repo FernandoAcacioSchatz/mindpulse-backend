@@ -1,0 +1,14 @@
+# Segredos — nunca sobem pro Git
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Editor
+.vscode/
+.idea/
