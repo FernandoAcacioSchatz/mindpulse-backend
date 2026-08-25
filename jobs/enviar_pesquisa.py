@@ -56,7 +56,10 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
     pesquisa_id = pesquisa["id"]
     prazo_horas = pesquisa.get("prazo_horas") or 24
 
-    ciclo = supabase.table("ciclo").select("empresa_id").eq("id", pesquisa["ciclo_id"]).single().execute().data
+    resposta_ciclo = supabase.table("ciclo").select("empresa_id").eq("id", pesquisa["ciclo_id"]).single().execute()
+    ciclo = resposta_ciclo.data if resposta_ciclo else None
+    if not ciclo:
+        raise ValueError(f"Ciclo {pesquisa['ciclo_id']} não encontrado ao processar pesquisa {pesquisa_id}.")
     empresa_id = ciclo["empresa_id"]
 
     funcionarios = (
@@ -85,12 +88,15 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         if existente:
             continue  # já processado numa execução anterior — idempotência
 
-        token = (
+        resposta_token = (
             supabase.table("token_resposta")
             .insert({"pesquisa_id": pesquisa_id, "funcionario_id": funcionario["id"], "expira_em": expira_em})
             .execute()
-            .data[0]
         )
+        if not resposta_token or not resposta_token.data:
+            print(f"[enviar_pesquisa] Falha ao criar token pra funcionário {funcionario['id']}, pulando.")
+            continue
+        token = resposta_token.data[0]
         fila_de_envio.append((funcionario, token))
 
     # ---- Passo 2: envia os e-mails em paralelo controlado (a parte lenta) ----
