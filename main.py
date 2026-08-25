@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
-from jobs import enviar_pesquisa, lembrete_diario
+from jobs import enviar_pesquisa, lembrete_diario, encerrar_automatico
 from routes import admin, encerrar_pesquisa, notificar_critico
 from schemas import EncerrarPesquisaPayload, NotificarCriticoPayload, ProvisionarEmpresaPayload
 
@@ -43,6 +43,7 @@ ORIGENS_PERMITIDAS = [
 async def lifespan(app: FastAPI):
     scheduler.add_job(lembrete_diario.rodar, CronTrigger(hour=8, minute=0), id="lembrete_diario")
     scheduler.add_job(enviar_pesquisa.rodar, CronTrigger(hour=9, minute=0), id="enviar_pesquisa")
+    scheduler.add_job(encerrar_automatico.rodar, CronTrigger(hour=10, minute=0), id="encerrar_automatico")
     scheduler.start()
     yield
     scheduler.shutdown()
@@ -85,6 +86,11 @@ def executar_lembrete_manual():
 @app.post("/executar/enviar-pesquisa", dependencies=[Depends(verificar_chave_sistema)])
 def executar_enviar_pesquisa_manual():
     return enviar_pesquisa.rodar()
+
+
+@app.post("/executar/encerrar-automatico", dependencies=[Depends(verificar_chave_sistema)])
+def executar_encerrar_automatico_manual():
+    return encerrar_automatico.rodar()
 
 
 @app.post("/notificar-alerta-critico", dependencies=[Depends(verificar_chave_sistema)])

@@ -157,6 +157,12 @@ def processar(payload: dict) -> dict:
         }).execute()
         resultados_setor[setor_id] = previsao_setor
 
+    # ---- 10. Marca a pesquisa como encerrada (faltava — bug real corrigido) ----
+    supabase.table("pesquisa").update({
+        "status": "encerrada",
+        "encerrada_em": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", pesquisa_id).execute()
+
     return {
         "relatorio_id": relatorio["id"],
         "prioridade_final": prioridade_final,
