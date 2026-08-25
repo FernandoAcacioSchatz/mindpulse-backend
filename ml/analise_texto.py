@@ -1,14 +1,3 @@
-"""
-Análise de texto do comentário aberto — combina 2 técnicas
-independentes, cada uma respondendo uma pergunta diferente:
-
-1. Sentimento (léxico) — o comentário é positivo, negativo ou neutro?
-2. Tema (TF-IDF + KNN, treinado com 490 frases reais) — de qual das
-   7 categorias esse comentário fala?
-
-Roda 100% local — carrega os modelos salvos em ml/modelos/ uma vez,
-na inicialização do servidor, sem chamar nenhuma API externa.
-"""
 from pathlib import Path
 
 import joblib
@@ -18,16 +7,56 @@ _vetorizador = joblib.load(_PASTA_MODELOS / "vetorizador_tema.joblib")
 _classificador_tema = joblib.load(_PASTA_MODELOS / "classificador_tema.joblib")
 
 _PALAVRAS_POSITIVAS = {
-    "bom", "boa", "otimo", "otima", "tranquilo", "tranquila", "satisfeito",
-    "satisfeita", "feliz", "reconhecido", "reconhecida", "valorizado",
-    "valorizada", "confio", "apoia", "apoio", "claro", "clara", "seguro",
-    "segura", "equilibrada", "equilibrado", "disposto", "disposta",
+    "bom",
+    "boa",
+    "otimo",
+    "otima",
+    "tranquilo",
+    "tranquila",
+    "satisfeito",
+    "satisfeita",
+    "feliz",
+    "reconhecido",
+    "reconhecida",
+    "valorizado",
+    "valorizada",
+    "confio",
+    "apoia",
+    "apoio",
+    "claro",
+    "clara",
+    "seguro",
+    "segura",
+    "equilibrada",
+    "equilibrado",
+    "disposto",
+    "disposta",
 }
 _PALAVRAS_NEGATIVAS = {
-    "nao", "exausto", "exausta", "sobrecarregado", "sobrecarregada",
-    "cansado", "cansada", "ruim", "pessimo", "pessima", "nunca", "aguento",
-    "demais", "sem", "medo", "ansiedade", "confuso", "confusa", "ausente",
-    "ignoradas", "ignoradas", "abusiva", "impropria", "improprio",
+    "nao",
+    "exausto",
+    "exausta",
+    "sobrecarregado",
+    "sobrecarregada",
+    "cansado",
+    "cansada",
+    "ruim",
+    "pessimo",
+    "pessima",
+    "nunca",
+    "aguento",
+    "demais",
+    "sem",
+    "medo",
+    "ansiedade",
+    "confuso",
+    "confusa",
+    "ausente",
+    "ignoradas",
+    "ignoradas",
+    "abusiva",
+    "impropria",
+    "improprio",
 }
 
 
@@ -53,7 +82,9 @@ def classificar_tema(texto: str) -> dict:
     categoria = _classificador_tema.predict(X)[0]
     # proporção dos vizinhos mais próximos que concordam com a categoria escolhida
     vizinhos = _classificador_tema.kneighbors(X, return_distance=False)[0]
-    rotulos_vizinhos = _classificador_tema._y[vizinhos] if hasattr(_classificador_tema, "_y") else None
+    rotulos_vizinhos = (
+        _classificador_tema._y[vizinhos] if hasattr(_classificador_tema, "_y") else None
+    )
     confianca = _classificador_tema.predict_proba(X).max()
     return {"categoria": categoria, "confianca": round(float(confianca), 2)}
 
