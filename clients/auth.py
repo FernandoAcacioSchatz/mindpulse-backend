@@ -63,14 +63,14 @@ def verificar_rh_pertence_a_empresa(auth_user_id: str, empresa_id: str) -> None:
     RLS — esta função substitui manualmente a proteção que o RLS
     dá de graça pro front-end.
     """
-    rh = (
+    resposta = (
         supabase.table("usuario_rh")
         .select("empresa_id, ativo")
         .eq("auth_user_id", auth_user_id)
         .maybe_single()
         .execute()
-        .data
     )
+    rh = resposta.data if resposta else None
     if not rh or not rh["ativo"]:
         raise HTTPException(403, "Usuário não encontrado ou inativo.")
     if rh["empresa_id"] != empresa_id:

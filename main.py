@@ -102,11 +102,23 @@ def rota_notificar_critico(payload: NotificarCriticoPayload):
 # Endpoint chamado pelo RH logado — protegido por JWT do Supabase
 # ================================================================
 
+def _buscar_um(query):
+    """
+    Roda uma query .maybe_single() com segurança. Em algumas versões
+    do supabase-py, .execute() devolve None direto quando não acha
+    nenhuma linha, em vez de um objeto de resposta com .data=None —
+    acessar .data nesse caso quebra com AttributeError. Essa função
+    trata os dois comportamentos.
+    """
+    resposta = query.execute()
+    return resposta.data if resposta else None
+
+
 @app.post("/encerrar-pesquisa")
 def rota_encerrar_pesquisa(payload: EncerrarPesquisaPayload, auth: dict = Depends(verificar_jwt_supabase)):
     dados = payload.model_dump(mode="json")
 
-    ciclo = supabase.table("ciclo").select("empresa_id").eq("id", dados["ciclo_id"]).maybe_single().execute().data
+    ciclo = _buscar_um(supabase.table("ciclo").select("empresa_id").eq("id", dados["ciclo_id"]).maybe_single())
     if not ciclo:
         raise HTTPException(404, "Ciclo não encontrado.")
 
@@ -117,20 +129,15 @@ def rota_encerrar_pesquisa(payload: EncerrarPesquisaPayload, auth: dict = Depend
 
 @app.post("/pesquisa/{pesquisa_id}/enviar")
 def rota_enviar_pesquisa_agora(pesquisa_id: str, auth: dict = Depends(verificar_jwt_supabase)):
-    pesquisa = (
-        supabase.table("pesquisa")
-        .select("id, nome, ciclo_id, prazo_horas, status")
-        .eq("id", pesquisa_id)
-        .maybe_single()
-        .execute()
-        .data
+    pesquisa = _buscar_um(
+        supabase.table("pesquisa").select("id, nome, ciclo_id, prazo_horas, status").eq("id", pesquisa_id).maybe_single()
     )
     if not pesquisa:
         raise HTTPException(404, "Pesquisa não encontrada.")
     if pesquisa["status"] != "agendada":
         raise HTTPException(400, "Essa pesquisa já foi enviada ou não está mais agendada.")
 
-    ciclo = supabase.table("ciclo").select("empresa_id").eq("id", pesquisa["ciclo_id"]).maybe_single().execute().data
+    ciclo = _buscar_um(supabase.table("ciclo").select("empresa_id").eq("id", pesquisa["ciclo_id"]).maybe_single())
     if not ciclo:
         raise HTTPException(404, "Ciclo não encontrado.")
 

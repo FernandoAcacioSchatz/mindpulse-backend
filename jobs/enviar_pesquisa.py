@@ -73,15 +73,15 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
     # ---- Passo 1: cria todos os tokens primeiro (rápido, só banco, sequencial está ok) ----
     fila_de_envio = []
     for funcionario in funcionarios:
-        existente = (
+        resposta_existente = (
             supabase.table("token_resposta")
             .select("id")
             .eq("pesquisa_id", pesquisa_id)
             .eq("funcionario_id", funcionario["id"])
             .maybe_single()
             .execute()
-            .data
         )
+        existente = resposta_existente.data if resposta_existente else None
         if existente:
             continue  # já processado numa execução anterior — idempotência
 
