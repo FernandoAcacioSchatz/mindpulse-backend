@@ -145,3 +145,10 @@ def rota_provisionar_empresa(payload: ProvisionarEmpresaPayload, _admin: dict = 
         rh_nome=payload.rh_nome,
         rh_email=payload.rh_email,
     )
+
+
+@app.get("/admin/verificar")
+def rota_verificar_admin(_admin: dict = Depends(verificar_admin)):
+    """Só confirma se quem está logado é da equipe Radar — usado pela
+    tela admin.html antes de mostrar o formulário de cadastro."""
+    return {"autorizado": True}
