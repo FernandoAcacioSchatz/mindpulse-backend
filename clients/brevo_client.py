@@ -11,7 +11,7 @@ def enviar_email(destinatario_email: str, destinatario_nome: str, assunto: str, 
         "https://api.brevo.com/v3/smtp/email",
         headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
         json={
-            "sender": {"name": "MindPulse", "email": BREVO_SENDER_EMAIL},
+            "sender": {"name": "Radar", "email": BREVO_SENDER_EMAIL},
             "to": [{"email": destinatario_email, "name": destinatario_nome}],
             "subject": assunto,
             "htmlContent": corpo_html,
