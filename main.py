@@ -41,8 +41,8 @@ ORIGENS_PERMITIDAS = [
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    scheduler.add_job(lembrete_diario.rodar, CronTrigger(hour=8, minute=0), id="lembrete_diario")
-    scheduler.add_job(enviar_pesquisa.rodar, CronTrigger(hour=9, minute=0), id="enviar_pesquisa")
+    scheduler.add_job(enviar_pesquisa.rodar, CronTrigger(hour=8, minute=0), id="enviar_pesquisa")
+    scheduler.add_job(lembrete_diario.rodar, CronTrigger(hour=8, minute=30), id="lembrete_diario")
     scheduler.add_job(encerrar_automatico.rodar, CronTrigger(hour=10, minute=0), id="encerrar_automatico")
     scheduler.start()
     yield
