@@ -114,7 +114,8 @@ def processar(payload: dict) -> dict:
 
     # ---- 8. Índice preditivo — empresa ----
     historico_empresa = _historico_score_empresa(empresa_id, ciclo_id)
-    historico_empresa.append(score_geral)
+    if score_geral is not None:
+        historico_empresa.append(score_geral)
     previsao_empresa = avaliar_indice(historico_empresa)
 
     # Segunda opinião via KNN (ml/classificador_knn.py) — roda ao lado
@@ -144,7 +145,8 @@ def processar(payload: dict) -> dict:
             continue
         score_setor_ciclo = round(sum(i["media"] for i in indicadores) / len(indicadores), 2)
         historico_setor = _historico_score_setor(setor_id, ciclo_id)
-        historico_setor.append(score_setor_ciclo)
+        if score_setor_ciclo is not None:
+            historico_setor.append(score_setor_ciclo)
         previsao_setor = avaliar_indice(historico_setor)
         knn_setor = classificar_por_knn(indicadores)
 
@@ -363,12 +365,14 @@ def _criar_alerta(ciclo_id: str, categoria_id: str | None, tipo: str, descricao:
 
 
 def _historico_score_empresa(empresa_id: str, ciclo_id_atual: str) -> list[float]:
+    # Usa criado_em, não data_inicio -- esse campo é opcional e a tela
+    # de criar ciclo nunca preenche ele, então fica sempre nulo.
     ciclos = (
         supabase.table("ciclo")
-        .select("id, data_inicio")
+        .select("id, criado_em")
         .eq("empresa_id", empresa_id)
         .neq("id", ciclo_id_atual)
-        .order("data_inicio")
+        .order("criado_em")
         .execute()
         .data
     )
@@ -383,11 +387,14 @@ def _historico_score_empresa(empresa_id: str, ciclo_id_atual: str) -> list[float
 def _historico_score_setor(setor_id: str, ciclo_id_atual: str) -> list[float]:
     linhas = (
         supabase.table("indice_setor")
-        .select("score, ciclo:ciclo_id(data_inicio)")
+        .select("score, ciclo:ciclo_id(criado_em)")
         .eq("setor_id", setor_id)
         .neq("ciclo_id", ciclo_id_atual)
         .execute()
         .data
     )
-    linhas_ordenadas = sorted(linhas, key=lambda x: x["ciclo"]["data_inicio"] if x.get("ciclo") else "")
+    # Filtra linha sem score ou sem data antes de ordenar -- evita
+    # comparar None com None (TypeError em Python)
+    linhas_validas = [l for l in linhas if l.get("score") is not None and l.get("ciclo") and l["ciclo"].get("criado_em")]
+    linhas_ordenadas = sorted(linhas_validas, key=lambda x: x["ciclo"]["criado_em"])
     return [l["score"] for l in linhas_ordenadas]
