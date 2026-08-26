@@ -30,7 +30,10 @@ def processar(payload: dict) -> dict:
     pesquisa_id = payload["pesquisa_id"]
     ciclo_id = payload["ciclo_id"]
 
-    ciclo = supabase.table("ciclo").select("empresa_id").eq("id", ciclo_id).single().execute().data
+    resposta_ciclo = supabase.table("ciclo").select("empresa_id").eq("id", ciclo_id).single().execute()
+    ciclo = resposta_ciclo.data if resposta_ciclo else None
+    if not ciclo:
+        raise ValueError(f"Ciclo {ciclo_id} não encontrado ao encerrar pesquisa {pesquisa_id}.")
     empresa_id = ciclo["empresa_id"]
 
     respostas = _buscar_respostas(pesquisa_id)
