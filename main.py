@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
-from jobs import enviar_pesquisa, lembrete_diario, encerrar_automatico
+from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
 from routes import admin, encerrar_pesquisa, notificar_critico
 from schemas import EncerrarPesquisaPayload, NotificarCriticoPayload, ProvisionarEmpresaPayload
 
@@ -43,6 +43,7 @@ ORIGENS_PERMITIDAS = [
 async def lifespan(app: FastAPI):
     scheduler.add_job(enviar_pesquisa.rodar, CronTrigger(hour=8, minute=0), id="enviar_pesquisa")
     scheduler.add_job(lembrete_diario.rodar, CronTrigger(hour=8, minute=30), id="lembrete_diario")
+    scheduler.add_job(lembrete_segundo.rodar, CronTrigger(hour=11, minute=30), id="lembrete_segundo")
     scheduler.add_job(encerrar_automatico.rodar, CronTrigger(hour=10, minute=0), id="encerrar_automatico")
     scheduler.start()
     yield
@@ -81,6 +82,11 @@ def status():
 @app.post("/executar/lembrete-diario", dependencies=[Depends(verificar_chave_sistema)])
 def executar_lembrete_manual():
     return lembrete_diario.rodar()
+
+
+@app.post("/executar/lembrete-segundo", dependencies=[Depends(verificar_chave_sistema)])
+def executar_lembrete_segundo_manual():
+    return lembrete_segundo.rodar()
 
 
 @app.post("/executar/enviar-pesquisa", dependencies=[Depends(verificar_chave_sistema)])
