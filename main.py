@@ -23,8 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
-from routes import admin, encerrar_pesquisa, notificar_critico
-from schemas import EncerrarPesquisaPayload, NotificarCriticoPayload, ProvisionarEmpresaPayload
+from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead
+from schemas import EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload
 
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
 
@@ -104,6 +104,11 @@ def rota_notificar_critico(payload: NotificarCriticoPayload):
     return notificar_critico.processar(payload.model_dump(mode="json"))
 
 
+@app.post("/notificar-novo-lead", dependencies=[Depends(verificar_chave_sistema)])
+def rota_notificar_lead(payload: NotificarLeadPayload):
+    return notificar_lead.processar(payload.model_dump(mode="json"))
+
+
 # ================================================================
 # Endpoint chamado pelo RH logado — protegido por JWT do Supabase
 # ================================================================
@@ -171,3 +176,13 @@ def rota_verificar_admin(_admin: dict = Depends(verificar_admin)):
     """Só confirma se quem está logado é da equipe Radar — usado pela
     tela admin.html antes de mostrar o formulário de cadastro."""
     return {"autorizado": True}
+
+
+@app.get("/admin/leads")
+def rota_listar_leads(_admin: dict = Depends(verificar_admin)):
+    """Mensagens recebidas pelo formulário de contato do site comercial.
+    Passa pelo backend (service_role) porque a tabela 'lead' não tem
+    política de leitura — só de escrita, de propósito (formulário
+    público não deveria conseguir LER contato de outra pessoa)."""
+    leads = supabase.table("lead").select("*").order("criado_em", desc=True).execute().data
+    return {"leads": leads}

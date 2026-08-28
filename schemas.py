@@ -25,6 +25,17 @@ class NotificarCriticoPayload(BaseModel):
     record: RelatorioIARecord
 
 
+class LeadRecord(BaseModel):
+    nome: Optional[str] = None
+    email: Optional[str] = None
+    empresa: Optional[str] = None
+    mensagem: Optional[str] = None
+
+
+class NotificarLeadPayload(BaseModel):
+    record: LeadRecord
+
+
 class ProvisionarEmpresaPayload(BaseModel):
     empresa_nome: str
     empresa_cnpj: Optional[str] = None
