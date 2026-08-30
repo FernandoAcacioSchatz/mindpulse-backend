@@ -4,29 +4,34 @@ Radar Backend — ponto de entrada.
 Roda localmente com:
     uvicorn main:app --reload
 
-Dois gatilhos, espelhando o que existia no n8n:
-- Jobs agendados (lembrete diário, enviar pesquisa) via APScheduler
-- Rotas HTTP (encerrar pesquisa, notificar crítico) chamadas
-  externamente — pela tela do RH ou pelo Supabase Database Webhook
+Gatilhos, espelhando o que existia no n8n:
+- Rotas HTTP (/executar/*, /encerrar-pesquisa, /notificar-*) chamadas
+  externamente — pela tela do RH, por cron externo (cron-job.org),
+  ou pelo Supabase Database Webhook.
+
+O agendador interno (APScheduler) que existia aqui foi removido —
+o Render gratuito "dorme" sem aviso, e um agendador que depende do
+processo estar de pé no segundo exato não é confiável nesse plano.
+Toda a parte de horário (enviar 8h, lembrete 8h30/11h30, encerrar
+10h) agora é responsabilidade do cron-job.org, configurado
+externamente — ver Documento 30. Rodar os dois ao mesmo tempo já
+causou o backend disparando 3h adiantado (tratando "8h" como UTC
+em vez de horário de Brasília) — não reintroduzir sem entender essa
+causa primeiro.
 
 Dois esquemas de segurança (ver clients/auth.py):
 - JWT do Supabase → endpoints chamados por RH logado
 - Chave de sistema → endpoints chamados por automação/webhook
 """
-from contextlib import asynccontextmanager
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
+from ml.mapa_3d import NUVEM_FUNDO, projetar_em_3d
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead
 from schemas import EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload
-
-scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
 
 # Origens autorizadas a chamar o backend diretamente do navegador.
 # Sem isso, o navegador bloqueia a chamada mesmo com JWT correto
@@ -39,18 +44,7 @@ ORIGENS_PERMITIDAS = [
 ]
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    scheduler.add_job(enviar_pesquisa.rodar, CronTrigger(hour=8, minute=0), id="enviar_pesquisa")
-    scheduler.add_job(lembrete_diario.rodar, CronTrigger(hour=8, minute=30), id="lembrete_diario")
-    scheduler.add_job(lembrete_segundo.rodar, CronTrigger(hour=11, minute=30), id="lembrete_segundo")
-    scheduler.add_job(encerrar_automatico.rodar, CronTrigger(hour=10, minute=0), id="encerrar_automatico")
-    scheduler.start()
-    yield
-    scheduler.shutdown()
-
-
-app = FastAPI(title="Radar Backend", lifespan=lifespan)
+app = FastAPI(title="Radar Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -186,3 +180,49 @@ def rota_listar_leads(_admin: dict = Depends(verificar_admin)):
     público não deveria conseguir LER contato de outra pessoa)."""
     leads = supabase.table("lead").select("*").order("criado_em", desc=True).execute().data
     return {"leads": leads}
+
+
+@app.get("/mapa-3d/nuvem-fundo")
+def rota_nuvem_fundo():
+    """Amostra fixa (2000 pontos) do dataset sintético, já projetada em
+    3D -- não muda nunca, não precisa de login (não é dado de cliente,
+    é o dataset de treino). O front busca isso 1 vez só e guarda."""
+    return {"pontos": NUVEM_FUNDO}
+
+
+@app.get("/mapa-3d/pesquisas")
+def rota_mapa_pesquisas(
+    empresa_id: str,
+    setor_id: str | None = None,
+    ciclo_ids: str | None = None,
+    auth: dict = Depends(verificar_jwt_supabase),
+):
+    """Projeta pesquisas reais no mesmo espaço 3D do dataset sintético.
+    setor_id ausente = nível empresa inteira. ciclo_ids ausente = todas
+    as pesquisas com indicador calculado nesse escopo."""
+    verificar_rh_pertence_a_empresa(auth["sub"], empresa_id)
+
+    query = supabase.table("ciclo").select("id, nome").eq("empresa_id", empresa_id)
+    if ciclo_ids:
+        query = query.in_("id", ciclo_ids.split(","))
+    ciclos = query.execute().data or []
+
+    pontos = []
+    for ciclo in ciclos:
+        indicadores_query = (
+            supabase.table("indicador")
+            .select("media, categoria:categoria_id(nome)")
+            .eq("ciclo_id", ciclo["id"])
+        )
+        indicadores_query = indicadores_query.eq("setor_id", setor_id) if setor_id else indicadores_query.is_("setor_id", "null")
+        indicadores_raw = indicadores_query.execute().data or []
+
+        if not indicadores_raw:
+            continue
+
+        indicadores = [{"categoria_nome": i["categoria"]["nome"], "media": i["media"]} for i in indicadores_raw if i.get("categoria")]
+        coords = projetar_em_3d(indicadores)
+        if coords:
+            pontos.append({"ciclo_id": ciclo["id"], "ciclo_nome": ciclo["nome"], **coords})
+
+    return {"pontos": pontos}

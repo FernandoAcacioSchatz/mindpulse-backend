@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
-apscheduler
 supabase
 openai
 httpx
