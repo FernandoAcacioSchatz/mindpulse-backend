@@ -38,7 +38,14 @@ def provisionar_empresa(empresa_nome: str, empresa_cnpj: str | None, rh_nome: st
     except Exception as e:
         # limpa a empresa criada no passo 1, pra não deixar lixo pela metade
         supabase.table("empresa").delete().eq("id", empresa["id"]).execute()
-        raise HTTPException(400, f"Não foi possível criar o login: {e}")
+
+        texto_erro = str(e)
+        if "already been registered" in texto_erro or "already registered" in texto_erro:
+            mensagem = f"O e-mail {rh_email} já está cadastrado em outra empresa. Use um e-mail diferente para esse RH."
+        else:
+            mensagem = "Não foi possível criar o login. Tente novamente em instantes."
+
+        raise HTTPException(400, mensagem)
 
     auth_user_id = resultado_auth.user.id
 
