@@ -24,14 +24,22 @@ from typing import Optional
 # (não é uma lista exaustiva), suficiente pra rotear pro RH agir.
 TEMAS_RISCO_ALTO = {
     "risco_a_vida": [
-        r"pensei em (me matar|acabar com (tudo|a (minha )?vida)|desistir de tudo)",
+        r"quero morrer",
+        r"queria (estar morto|estar morta|morrer|n[aã]o (ter nascido|existir))",
+        r"n[aã]o quero mais viver",
         r"n[aã]o aguento mais viver",
-        r"vontade de (sumir|desaparecer)",
-        r"me (cortar|machucar)",
+        r"n[aã]o vejo (mais )?sentido (em|na) vida",
+        r"(pensei em|penso em|tenho pensado em|quero) (me matar|acabar com (tudo|a (minha )?vida)|desistir de tudo|dar fim (a |em )?(tudo|isso)|tirar minha vida)",
+        r"vontade de (sumir|desaparecer|morrer|n[aã]o existir)",
+        r"quero (sumir|desaparecer) (de vez|pra sempre)?",
+        r"pensamentos? suicidas?",
+        r"ideia[cç][aã]o suicida",
+        r"me (cortar|machucar|ferir) (de prop[oó]sito)?",
     ],
     "assedio": [
         r"ass[eé]dio (moral|sexual)",
-        r"fui (assediad[oa]|amea[cç]ad[oa])",
+        r"(fui|sofri) (assediad[oa]|amea[cç]ad[oa])",
+        r"me (assediou|assediaram|amea[cç]ou|amea[cç]aram)",
         r"toque[s]? sem consentimento",
     ],
     "ameaca": [
