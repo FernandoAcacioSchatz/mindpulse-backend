@@ -29,7 +29,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
-from ml.mapa_3d import NUVEM_FUNDO, projetar_em_3d
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead
 from schemas import EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload
 
@@ -180,49 +179,3 @@ def rota_listar_leads(_admin: dict = Depends(verificar_admin)):
     público não deveria conseguir LER contato de outra pessoa)."""
     leads = supabase.table("lead").select("*").order("criado_em", desc=True).execute().data
     return {"leads": leads}
-
-
-@app.get("/mapa-3d/nuvem-fundo")
-def rota_nuvem_fundo():
-    """Amostra fixa (2000 pontos) do dataset sintético, já projetada em
-    3D -- não muda nunca, não precisa de login (não é dado de cliente,
-    é o dataset de treino). O front busca isso 1 vez só e guarda."""
-    return {"pontos": NUVEM_FUNDO}
-
-
-@app.get("/mapa-3d/pesquisas")
-def rota_mapa_pesquisas(
-    empresa_id: str,
-    setor_id: str | None = None,
-    ciclo_ids: str | None = None,
-    auth: dict = Depends(verificar_jwt_supabase),
-):
-    """Projeta pesquisas reais no mesmo espaço 3D do dataset sintético.
-    setor_id ausente = nível empresa inteira. ciclo_ids ausente = todas
-    as pesquisas com indicador calculado nesse escopo."""
-    verificar_rh_pertence_a_empresa(auth["sub"], empresa_id)
-
-    query = supabase.table("ciclo").select("id, nome").eq("empresa_id", empresa_id)
-    if ciclo_ids:
-        query = query.in_("id", ciclo_ids.split(","))
-    ciclos = query.execute().data or []
-
-    pontos = []
-    for ciclo in ciclos:
-        indicadores_query = (
-            supabase.table("indicador")
-            .select("media, categoria:categoria_id(nome)")
-            .eq("ciclo_id", ciclo["id"])
-        )
-        indicadores_query = indicadores_query.eq("setor_id", setor_id) if setor_id else indicadores_query.is_("setor_id", "null")
-        indicadores_raw = indicadores_query.execute().data or []
-
-        if not indicadores_raw:
-            continue
-
-        indicadores = [{"categoria_nome": i["categoria"]["nome"], "media": i["media"]} for i in indicadores_raw if i.get("categoria")]
-        coords = projetar_em_3d(indicadores)
-        if coords:
-            pontos.append({"ciclo_id": ciclo["id"], "ciclo_nome": ciclo["nome"], **coords})
-
-    return {"pontos": pontos}
