@@ -1,12 +1,3 @@
-"""
-Primeiro lembrete da cascata: dispara 24h depois do envio original,
-só pra quem ainda não respondeu e ainda não recebeu esse lembrete
-(cada token só recebe UMA vez -- antes mandava todo dia, corrigido).
-
-Roda todo dia às 8h (mesma hora do envio original, faz sentido: quem
-foi convidado ontem às 8h completa 24h hoje às 8h). Também pode ser
-disparado manualmente via POST /executar/lembrete-diario.
-"""
 from datetime import datetime, timezone
 
 from clients.supabase_client import supabase
@@ -42,7 +33,13 @@ def rodar() -> dict:
         if horas_desde_envio < HORAS_ATE_O_PRIMEIRO_LEMBRETE:
             continue
 
-        resposta_func = supabase.table("funcionario").select("nome, email").eq("id", token["funcionario_id"]).single().execute()
+        resposta_func = (
+            supabase.table("funcionario")
+            .select("nome, email")
+            .eq("id", token["funcionario_id"])
+            .single()
+            .execute()
+        )
         funcionario = resposta_func.data if resposta_func else None
         if not funcionario:
             continue
@@ -63,7 +60,9 @@ def rodar() -> dict:
                 <p>Leva menos de 5 minutos e sua resposta é anônima.</p>
             """,
         )
-        supabase.table("token_resposta").update({"lembrete1_enviado_em": agora.isoformat()}).eq("id", token["id"]).execute()
+        supabase.table("token_resposta").update(
+            {"lembrete1_enviado_em": agora.isoformat()}
+        ).eq("id", token["id"]).execute()
         enviados += 1
 
     resultado = {"tokens_verificados": len(tokens), "lembretes_enviados": enviados}
