@@ -12,7 +12,7 @@ Recebe: { "pesquisa_id": ..., "ciclo_id": ... }
 from datetime import datetime, timezone
 from collections import defaultdict, Counter
 
-from clients.supabase_client import supabase
+from clients.supabase_client import com_nova_tentativa, supabase
 from clients.gemini_client import analisar_ciclo
 from ml.qualidade_resposta import avaliar_qualidade, resumo_qualidade_ciclo
 from ml.classificador_comentarios import classificar_comentario
@@ -374,32 +374,32 @@ def _criar_alerta(ciclo_id: str, categoria_id: str | None, tipo: str, descricao:
 def _historico_score_empresa(empresa_id: str, ciclo_id_atual: str) -> list[float]:
     # Usa criado_em, não data_inicio -- esse campo é opcional e a tela
     # de criar ciclo nunca preenche ele, então fica sempre nulo.
-    ciclos = (
+    ciclos = com_nova_tentativa(lambda:
         supabase.table("ciclo")
         .select("id, criado_em")
         .eq("empresa_id", empresa_id)
         .neq("id", ciclo_id_atual)
         .order("criado_em")
         .execute()
-        .data
-    )
+    ).data
     scores = []
     for c in ciclos:
-        relatorios = supabase.table("relatorio_ia").select("score_geral").eq("ciclo_id", c["id"]).execute().data
+        relatorios = com_nova_tentativa(
+            lambda: supabase.table("relatorio_ia").select("score_geral").eq("ciclo_id", c["id"]).execute()
+        ).data
         if relatorios and relatorios[0]["score_geral"] is not None:
             scores.append(relatorios[0]["score_geral"])
     return scores
 
 
 def _historico_score_setor(setor_id: str, ciclo_id_atual: str) -> list[float]:
-    linhas = (
+    linhas = com_nova_tentativa(lambda:
         supabase.table("indice_setor")
         .select("score, ciclo:ciclo_id(criado_em)")
         .eq("setor_id", setor_id)
         .neq("ciclo_id", ciclo_id_atual)
         .execute()
-        .data
-    )
+    ).data
     # Filtra linha sem score ou sem data antes de ordenar -- evita
     # comparar None com None (TypeError em Python)
     linhas_validas = [l for l in linhas if l.get("score") is not None and l.get("ciclo") and l["ciclo"].get("criado_em")]
