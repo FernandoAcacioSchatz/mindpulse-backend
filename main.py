@@ -23,7 +23,7 @@ Dois esquemas de segurança (ver clients/auth.py):
 - JWT do Supabase → endpoints chamados por RH logado
 - Chave de sistema → endpoints chamados por automação/webhook
 """
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
@@ -88,8 +88,14 @@ def executar_enviar_pesquisa_manual():
 
 
 @app.post("/executar/encerrar-automatico", dependencies=[Depends(verificar_chave_sistema)])
-def executar_encerrar_automatico_manual():
-    return encerrar_automatico.rodar()
+def executar_encerrar_automatico_manual(background_tasks: BackgroundTasks):
+    # Chama o Gemini + PLN, pode levar bem mais que 30s com várias
+    # pesquisas de uma vez -- alguns serviços de cron gratuito têm
+    # tempo limite curto e não configurável (ex: cron-job.org, 30s
+    # fixo). Responde rápido aqui, processa de verdade depois, em
+    # segundo plano -- o cron não fica esperando o trabalho pesado.
+    background_tasks.add_task(encerrar_automatico.rodar)
+    return {"status": "processamento iniciado em segundo plano"}
 
 
 @app.post("/notificar-alerta-critico", dependencies=[Depends(verificar_chave_sistema)])
