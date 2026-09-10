@@ -30,7 +30,7 @@ from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt
 from clients.supabase_client import supabase
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead
-from schemas import EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload
+from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
 
 # Origens autorizadas a chamar o backend diretamente do navegador.
 # Sem isso, o navegador bloqueia a chamada mesmo com JWT correto
@@ -185,6 +185,19 @@ def rota_listar_leads(_admin: dict = Depends(verificar_admin)):
     público não deveria conseguir LER contato de outra pessoa)."""
     leads = supabase.table("lead").select("*").order("criado_em", desc=True).execute().data
     return {"leads": leads}
+
+
+@app.patch("/admin/leads/{lead_id}")
+def rota_atualizar_status_lead(lead_id: str, payload: AtualizarStatusLeadPayload, _admin: dict = Depends(verificar_admin)):
+    """Marca (ou desmarca) um lead como visto ou respondido -- sempre
+    grava quem fez isso e quando, usando o e-mail de quem está logado."""
+    return admin.atualizar_status_lead(lead_id, payload.campo, payload.marcar, _admin["email"])
+
+
+@app.put("/admin/leads/{lead_id}/observacoes")
+def rota_salvar_observacao_lead(lead_id: str, payload: SalvarObservacaoLeadPayload, _admin: dict = Depends(verificar_admin)):
+    """Anotação livre sobre o lead."""
+    return admin.salvar_observacao_lead(lead_id, payload.observacoes)
 
 
 @app.get("/admin/empresas")

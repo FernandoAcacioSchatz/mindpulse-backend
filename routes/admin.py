@@ -10,6 +10,7 @@ nunca visualizar conteúdo sensível de cliente. Ver Documento 3
 """
 import secrets
 import string
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
@@ -68,107 +69,35 @@ def provisionar_empresa(empresa_nome: str, empresa_cnpj: str | None, rh_nome: st
     }
 
 
-def listar_empresas() -> list[dict]:
+def atualizar_status_lead(lead_id: str, campo: str, marcar: bool, email_admin: str) -> dict:
     """
-    Visão operacional de todas as empresas clientes -- quantidade de
-    funcionário e de ciclo, e o status do ciclo mais recente. NUNCA
-    devolve score, indicador, sentimento ou qualquer resultado de
-    pesquisa -- só o essencial pra saber "quem está usando o quê".
+    Marca (ou desmarca) um lead como visto ou respondido, sempre
+    gravando quem fez isso e quando -- nunca um campo de texto livre
+    pra digitar nome, pra não ter "João" e "joao" como pessoas
+    diferentes no rastro de auditoria.
     """
-    empresas = supabase.table("empresa").select("id, nome").order("nome").execute().data or []
+    if campo not in ("visto", "respondido"):
+        raise HTTPException(400, "Campo inválido -- use 'visto' ou 'respondido'.")
 
-    resultado = []
-    for emp in empresas:
-        total_funcionarios = (
-            supabase.table("funcionario")
-            .select("id", count="exact")
-            .eq("empresa_id", emp["id"])
-            .execute()
-            .count or 0
-        )
+    coluna_por = f"{campo}_por"
+    coluna_em = f"{campo}_em"
 
-        ciclos = (
-            supabase.table("ciclo")
-            .select("id, criado_em, pesquisa:pesquisa(status)")
-            .eq("empresa_id", emp["id"])
-            .order("criado_em", desc=True)
-            .execute()
-            .data or []
-        )
-
-        status_recente = None
-        if ciclos:
-            pesquisa = ciclos[0].get("pesquisa")
-            pesquisa = pesquisa[0] if isinstance(pesquisa, list) else pesquisa
-            status_recente = pesquisa["status"] if pesquisa else None
-
-        resultado.append({
-            "id": emp["id"],
-            "nome": emp["nome"],
-            "total_funcionarios": total_funcionarios,
-            "total_ciclos": len(ciclos),
-            "status_ciclo_mais_recente": status_recente,
-        })
-
-    return resultado
-
-
-def detalhar_empresa(empresa_id: str) -> dict:
-    """
-    Linha do tempo operacional de 1 empresa -- cada ciclo com status e
-    taxa de resposta (quantos de quantos), sem score nem indicador.
-    """
-    empresa = supabase.table("empresa").select("id, nome, cnpj").eq("id", empresa_id).maybe_single().execute().data
-    if not empresa:
-        raise HTTPException(404, "Empresa não encontrada.")
-
-    total_funcionarios = (
-        supabase.table("funcionario")
-        .select("id", count="exact")
-        .eq("empresa_id", empresa_id)
-        .execute()
-        .count or 0
-    )
-
-    ciclos = (
-        supabase.table("ciclo")
-        .select("id, nome, criado_em, pesquisa:pesquisa(id, status)")
-        .eq("empresa_id", empresa_id)
-        .order("criado_em", desc=True)
-        .execute()
-        .data or []
-    )
-
-    ciclos_detalhados = []
-    for c in ciclos:
-        pesquisa = c.get("pesquisa")
-        pesquisa = pesquisa[0] if isinstance(pesquisa, list) else pesquisa
-
-        respondidos, total_convidados = 0, 0
-        if pesquisa:
-            tokens = (
-                supabase.table("token_resposta")
-                .select("respondido")
-                .eq("pesquisa_id", pesquisa["id"])
-                .execute()
-                .data or []
-            )
-            total_convidados = len(tokens)
-            respondidos = len([t for t in tokens if t["respondido"]])
-
-        ciclos_detalhados.append({
-            "id": c["id"],
-            "nome": c["nome"],
-            "criado_em": c["criado_em"],
-            "status": pesquisa["status"] if pesquisa else None,
-            "respondidos": respondidos,
-            "total_convidados": total_convidados,
-        })
-
-    return {
-        "id": empresa["id"],
-        "nome": empresa["nome"],
-        "cnpj": empresa["cnpj"],
-        "total_funcionarios": total_funcionarios,
-        "ciclos": ciclos_detalhados,
+    dados = {
+        coluna_por: email_admin if marcar else None,
+        coluna_em: datetime.now(timezone.utc).isoformat() if marcar else None,
     }
+
+    resultado = supabase.table("lead").update(dados).eq("id", lead_id).execute().data
+    if not resultado:
+        raise HTTPException(404, "Lead não encontrado.")
+    return resultado[0]
+
+
+def salvar_observacao_lead(lead_id: str, observacoes: str) -> dict:
+    """Anotação livre sobre o lead -- o que já foi combinado, retorno
+    do cliente, próximo passo, etc. Sobrescreve o texto anterior (é
+    1 campo de anotação corrente, não um histórico de comentários)."""
+    resultado = supabase.table("lead").update({"observacoes": observacoes}).eq("id", lead_id).execute().data
+    if not resultado:
+        raise HTTPException(404, "Lead não encontrado.")
+    return resultado[0]

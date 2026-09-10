@@ -46,3 +46,12 @@ class ProvisionarEmpresaPayload(BaseModel):
 class ExecutarJobResponse(BaseModel):
     """Usado só como referência de formato de resposta — não obrigatório usar."""
     pass
+
+
+class AtualizarStatusLeadPayload(BaseModel):
+    campo: str  # "visto" ou "respondido"
+    marcar: bool = True
+
+
+class SalvarObservacaoLeadPayload(BaseModel):
+    observacoes: str
