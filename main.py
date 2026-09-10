@@ -185,3 +185,17 @@ def rota_listar_leads(_admin: dict = Depends(verificar_admin)):
     público não deveria conseguir LER contato de outra pessoa)."""
     leads = supabase.table("lead").select("*").order("criado_em", desc=True).execute().data
     return {"leads": leads}
+
+
+@app.get("/admin/empresas")
+def rota_listar_empresas(_admin: dict = Depends(verificar_admin)):
+    """Visão operacional de todas as empresas -- funcionários, ciclos,
+    status do ciclo mais recente. Nunca devolve score/indicador."""
+    return {"empresas": admin.listar_empresas()}
+
+
+@app.get("/admin/empresas/{empresa_id}")
+def rota_detalhar_empresa(empresa_id: str, _admin: dict = Depends(verificar_admin)):
+    """Linha do tempo de ciclos de 1 empresa -- status e taxa de
+    resposta de cada um. Nunca devolve score/indicador."""
+    return admin.detalhar_empresa(empresa_id)

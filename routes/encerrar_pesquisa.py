@@ -138,6 +138,10 @@ def processar(payload: dict) -> dict:
         "confianca_knn": knn_empresa["confianca_knn"] if knn_empresa else None,
     }).execute().data[0]
 
+    # ---- 8b. Aspectos identificados (ABSA) -- 1 linha por aspecto,
+    # ligado à categoria real do banco, não ao nome que a IA devolveu ----
+    _salvar_aspectos(ciclo_id, analise_ia.get("aspectos_identificados", []))
+
     # ---- 9. Índice preditivo — por setor ----
     resultados_setor = {}
     for setor_id, indicadores in indicadores_por_setor.items():
@@ -172,6 +176,7 @@ def processar(payload: dict) -> dict:
         "relatorio_id": relatorio["id"],
         "prioridade_final": prioridade_final,
         "alertas_criados": len([a for a in alertas_criados if a is not None]),
+        "aspectos_identificados": len(analise_ia.get("aspectos_identificados", [])),
         "resumo_qualidade": resumo_qualidade,
         "sentimento_comentarios": resumo_sentimento,
         "temas_comentarios": temas_comentarios,
@@ -353,6 +358,39 @@ def _media_anterior_da_categoria(ciclo_anterior_id: str, categoria_id: str) -> f
         .data
     )
     return linhas[0]["media"] if linhas else None
+
+
+def _salvar_aspectos(ciclo_id: str, aspectos: list[dict]) -> None:
+    """
+    Grava cada aspecto (categoria + polaridade + evidência) devolvido
+    pelo Gemini via ABSA. A IA manda o NOME da categoria (mesmo texto
+    já cadastrado em `categoria`, ver gemini_client.py) -- aqui a
+    gente resolve pro categoria_id de verdade antes de salvar, e
+    ignora silenciosamente qualquer nome que não bata (nunca deveria
+    acontecer, dado que o schema já restringe as opções, mas não
+    trava o encerramento da pesquisa por causa disso).
+    """
+    if not aspectos:
+        return
+
+    categorias = supabase.table("categoria").select("id, nome").execute().data or []
+    id_por_nome = {c["nome"]: c["id"] for c in categorias}
+
+    linhas = []
+    for a in aspectos:
+        categoria_id = id_por_nome.get(a.get("categoria"))
+        if not categoria_id:
+            print(f"[encerrar_pesquisa] Categoria de aspecto não reconhecida, ignorando: {a.get('categoria')!r}")
+            continue
+        linhas.append({
+            "ciclo_id": ciclo_id,
+            "categoria_id": categoria_id,
+            "polaridade": a.get("polaridade"),
+            "evidencia": a.get("evidencia"),
+        })
+
+    if linhas:
+        supabase.table("aspecto_comentario").insert(linhas).execute()
 
 
 def _criar_alerta(ciclo_id: str, categoria_id: str | None, tipo: str, descricao: str) -> dict | None:
