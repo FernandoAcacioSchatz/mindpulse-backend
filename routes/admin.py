@@ -101,3 +101,109 @@ def salvar_observacao_lead(lead_id: str, observacoes: str) -> dict:
     if not resultado:
         raise HTTPException(404, "Lead não encontrado.")
     return resultado[0]
+
+
+def listar_empresas() -> list[dict]:
+    """
+    Visão operacional de todas as empresas clientes -- quantidade de
+    funcionário e de ciclo, e o status do ciclo mais recente. NUNCA
+    devolve score, indicador, sentimento ou qualquer resultado de
+    pesquisa -- só o essencial pra saber "quem está usando o quê".
+    """
+    empresas = supabase.table("empresa").select("id, nome").order("nome").execute().data or []
+
+    resultado = []
+    for emp in empresas:
+        total_funcionarios = (
+            supabase.table("funcionario")
+            .select("id", count="exact")
+            .eq("empresa_id", emp["id"])
+            .execute()
+            .count or 0
+        )
+
+        ciclos = (
+            supabase.table("ciclo")
+            .select("id, criado_em, pesquisa:pesquisa(status)")
+            .eq("empresa_id", emp["id"])
+            .order("criado_em", desc=True)
+            .execute()
+            .data or []
+        )
+
+        status_recente = None
+        if ciclos:
+            pesquisa = ciclos[0].get("pesquisa")
+            pesquisa = pesquisa[0] if isinstance(pesquisa, list) else pesquisa
+            status_recente = pesquisa["status"] if pesquisa else None
+
+        resultado.append({
+            "id": emp["id"],
+            "nome": emp["nome"],
+            "total_funcionarios": total_funcionarios,
+            "total_ciclos": len(ciclos),
+            "status_ciclo_mais_recente": status_recente,
+        })
+
+    return resultado
+
+
+def detalhar_empresa(empresa_id: str) -> dict:
+    """
+    Linha do tempo operacional de 1 empresa -- cada ciclo com status e
+    taxa de resposta (quantos de quantos), sem score nem indicador.
+    """
+    empresa = supabase.table("empresa").select("id, nome, cnpj").eq("id", empresa_id).maybe_single().execute().data
+    if not empresa:
+        raise HTTPException(404, "Empresa não encontrada.")
+
+    total_funcionarios = (
+        supabase.table("funcionario")
+        .select("id", count="exact")
+        .eq("empresa_id", empresa_id)
+        .execute()
+        .count or 0
+    )
+
+    ciclos = (
+        supabase.table("ciclo")
+        .select("id, nome, criado_em, pesquisa:pesquisa(id, status)")
+        .eq("empresa_id", empresa_id)
+        .order("criado_em", desc=True)
+        .execute()
+        .data or []
+    )
+
+    ciclos_detalhados = []
+    for c in ciclos:
+        pesquisa = c.get("pesquisa")
+        pesquisa = pesquisa[0] if isinstance(pesquisa, list) else pesquisa
+
+        respondidos, total_convidados = 0, 0
+        if pesquisa:
+            tokens = (
+                supabase.table("token_resposta")
+                .select("respondido")
+                .eq("pesquisa_id", pesquisa["id"])
+                .execute()
+                .data or []
+            )
+            total_convidados = len(tokens)
+            respondidos = len([t for t in tokens if t["respondido"]])
+
+        ciclos_detalhados.append({
+            "id": c["id"],
+            "nome": c["nome"],
+            "criado_em": c["criado_em"],
+            "status": pesquisa["status"] if pesquisa else None,
+            "respondidos": respondidos,
+            "total_convidados": total_convidados,
+        })
+
+    return {
+        "id": empresa["id"],
+        "nome": empresa["nome"],
+        "cnpj": empresa["cnpj"],
+        "total_funcionarios": total_funcionarios,
+        "ciclos": ciclos_detalhados,
+    }
