@@ -22,13 +22,45 @@ from config import SUPABASE_URL, SUPABASE_ANON_KEY
 
 router = APIRouter()
 
+# 1 conexão HTTP compartilhada, criada uma vez só e reaproveitada em
+# toda chamada -- antes, cada requisição abria um cliente novo
+# (com pool de conexão e contexto SSL próprios), o que consumia
+# memória a mais a cada chamada simultânea. Isso contribuiu pro
+# backend estourar o limite de memória do Render sob uso mais
+# intenso (ex: várias telas carregando dado ao mesmo tempo).
+_cliente_http: httpx.AsyncClient | None = None
+
+
+def _obter_cliente_http() -> httpx.AsyncClient:
+    global _cliente_http
+    if _cliente_http is None:
+        _cliente_http = httpx.AsyncClient(timeout=30.0)
+    return _cliente_http
+
 NOME_COOKIE_ACCESS = "radar_access_token"
 NOME_COOKIE_REFRESH = "radar_refresh_token"
 
 # Em produção (Render + Vercel são domínios diferentes) o cookie
 # PRECISA de SameSite=None + Secure pra ser enviado entre domínios --
 # sem isso, o navegador recusa mandar o cookie de volta.
-COOKIE_OPCOES = dict(httponly=True, secure=True, samesite="none", path="/")
+def _opcoes_cookie(request: Request) -> dict:
+    """
+    Em produção (Render/Vercel, sempre HTTPS) o cookie usa
+    Secure+SameSite=None, obrigatório pra viajar entre domínios
+    diferentes. Rodando local (Live Server + uvicorn, em HTTP puro),
+    Secure faria o navegador recusar o cookie -- então usa
+    SameSite=Lax sem Secure, que funciona entre portas diferentes do
+    mesmo host (127.0.0.1:5500 <-> 127.0.0.1:8000). Se ajusta sozinho
+    olhando o protocolo de quem chamou -- nunca precisa trocar nada
+    na mão antes de subir pra produção.
+    """
+    https = request.url.scheme == "https"
+    return dict(
+        httponly=True,
+        secure=https,
+        samesite="none" if https else "lax",
+        path="/",
+    )
 
 
 def _extrair_token_do_cookie(request: Request) -> str | None:
@@ -36,30 +68,41 @@ def _extrair_token_do_cookie(request: Request) -> str | None:
 
 
 async def _repassar_para_supabase(request: Request, caminho: str) -> httpx.Response:
-    """Repassa a chamada pro Supabase de verdade, com o token certo."""
+    """Repassa a chamada pro Supabase de verdade, com o token certo.
+
+    Copia TODOS os cabeçalhos que o navegador mandou (Prefer, Range,
+    Accept-Profile, etc. -- o supabase-js manda vários além de
+    apikey/Authorization, e cada um controla um comportamento
+    diferente do PostgREST, tipo "me devolve a linha que acabei de
+    criar"). Só remove os que não fazem sentido repassar (Host, o
+    Cookie -- que é NOSSO, o Supabase não usa -- e Content-Length,
+    que o httpx recalcula sozinho). Depois disso, sobrescreve
+    apikey/Authorization com os valores certos."""
     token = _extrair_token_do_cookie(request)
 
     cabecalhos = {
-        "apikey": SUPABASE_ANON_KEY,
-        "Content-Type": request.headers.get("content-type", "application/json"),
+        chave: valor for chave, valor in request.headers.items()
+        if chave.lower() not in ("host", "cookie", "content-length", "connection")
     }
-    # Só anexa Authorization se existir sessão -- sem isso, a chamada
-    # segue como "anon" (é o comportamento certo pra rota pública,
-    # tipo a tela de pesquisa que o funcionário responde sem login).
+    cabecalhos["apikey"] = SUPABASE_ANON_KEY
+    # Só anexa Authorization com o token se existir sessão -- sem isso,
+    # a chamada segue como "anon" (é o comportamento certo pra rota
+    # pública, tipo a tela de pesquisa que o funcionário responde
+    # sem login).
     cabecalhos["Authorization"] = f"Bearer {token}" if token else f"Bearer {SUPABASE_ANON_KEY}"
 
     corpo = await request.body()
     url_destino = f"{SUPABASE_URL}/{caminho}"
 
-    async with httpx.AsyncClient() as client:
-        return await client.request(
-            method=request.method,
-            url=url_destino,
-            params=request.query_params,
-            headers=cabecalhos,
-            content=corpo,
-            timeout=30.0,
-        )
+    cliente = _obter_cliente_http()
+    return await cliente.request(
+        method=request.method,
+        url=url_destino,
+        params=request.query_params,
+        headers=cabecalhos,
+        content=corpo,
+        timeout=30.0,
+    )
 
 
 def _resposta_repassada(resp_supabase: httpx.Response) -> Response:
@@ -96,10 +139,11 @@ async def proxy_login_ou_refresh(request: Request):
     corpo_seguro = {"user": usuario, "autenticado": bool(access_token)}
     resposta = Response(content=__import__("json").dumps(corpo_seguro), media_type="application/json")
 
+    opcoes = _opcoes_cookie(request)
     if access_token:
-        resposta.set_cookie(NOME_COOKIE_ACCESS, access_token, max_age=3600, **COOKIE_OPCOES)
+        resposta.set_cookie(NOME_COOKIE_ACCESS, access_token, max_age=3600, **opcoes)
     if refresh_token:
-        resposta.set_cookie(NOME_COOKIE_REFRESH, refresh_token, max_age=60 * 60 * 24 * 30, **COOKIE_OPCOES)
+        resposta.set_cookie(NOME_COOKIE_REFRESH, refresh_token, max_age=60 * 60 * 24 * 30, **opcoes)
 
     return resposta
 
@@ -125,12 +169,12 @@ async def sessao_atual(request: Request):
     if not token:
         return {"user": None}
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{SUPABASE_URL}/auth/v1/user",
-            headers={"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {token}"},
-            timeout=10.0,
-        )
+    cliente = _obter_cliente_http()
+    resp = await cliente.get(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={"apikey": SUPABASE_ANON_KEY, "Authorization": f"Bearer {token}"},
+        timeout=10.0,
+    )
     if resp.status_code != 200:
         return {"user": None}
     return {"user": resp.json()}
@@ -145,4 +189,17 @@ async def proxy_rest(request: Request, caminho: str):
     token nenhum dentro, só o resultado da consulta em si.
     """
     resp = await _repassar_para_supabase(request, f"rest/v1/{caminho}")
+    return _resposta_repassada(resp)
+
+
+@router.api_route("/supabase-proxy/storage/v1/{caminho:path}", methods=["GET", "POST", "PATCH", "DELETE", "PUT"])
+async def proxy_storage(request: Request, caminho: str):
+    """
+    Upload/download/exclusão de arquivo (evidência, etc.) usa uma
+    API separada do Supabase (Storage, não REST) -- mesmo princípio
+    do proxy_rest, só que repassando pra /storage/v1/ em vez de
+    /rest/v1/. Faltava essa rota -- por isso upload de evidência
+    dava 404 antes.
+    """
+    resp = await _repassar_para_supabase(request, f"storage/v1/{caminho}")
     return _resposta_repassada(resp)
