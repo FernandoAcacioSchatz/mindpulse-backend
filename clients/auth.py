@@ -23,6 +23,7 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from clients.supabase_client import supabase
+from clients.sessoes import obter_access_token
 from config import ADMIN_EMAILS, BACKEND_API_KEY, SUPABASE_URL
 
 # auto_error=False -- se não vier cabeçalho, não estoura erro sozinho;
@@ -32,7 +33,7 @@ from config import ADMIN_EMAILS, BACKEND_API_KEY, SUPABASE_URL
 _bearer_scheme = HTTPBearer(description="Token de sessão do Supabase Auth (RH logado)", auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", description="Chave de sistema, para chamadas automatizadas")
 
-NOME_COOKIE_ACCESS = "radar_access_token"
+NOME_COOKIE_SESSAO = "radar_sessao"
 
 
 # Seu projeto usa o sistema novo de chaves assimétricas do Supabase
@@ -64,7 +65,7 @@ def verificar_jwt_supabase(
     2. Cabeçalho Authorization -- caminho antigo, mantido só durante
        a transição das telas que ainda não foram atualizadas.
     """
-    token = request.cookies.get(NOME_COOKIE_ACCESS)
+    token = obter_access_token(request.cookies.get(NOME_COOKIE_SESSAO))
     if not token and credentials:
         token = credentials.credentials
     if not token:
