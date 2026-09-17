@@ -21,6 +21,7 @@ comentário como "meu líder é ótimo, mas a carga de trabalho está
 impossível" antes só virava 1 tema no classificador local -- agora
 os dois aspectos aparecem separados.
 """
+
 import json
 from typing import Literal
 
@@ -40,8 +41,13 @@ MODEL = "gemini-3.6-flash"  # modelo Flash — dentro do nível gratuito da API
 # no banco (tabela categoria) -- é assim que a gente liga o aspecto
 # devolvido pela IA de volta pra categoria_id na hora de salvar.
 CATEGORIAS = Literal[
-    "Carga de Trabalho", "Liderança", "Comunicação", "Reconhecimento",
-    "Bem-estar", "Segurança Psicológica", "Assédio",
+    "Carga de Trabalho",
+    "Liderança",
+    "Comunicação",
+    "Reconhecimento",
+    "Bem-estar",
+    "Segurança Psicológica",
+    "Assédio",
 ]
 
 
@@ -78,7 +84,9 @@ SYSTEM_PROMPT = (
 )
 
 
-def analisar_ciclo(indicadores: list, total_respondentes: int, comentarios: list) -> dict:
+def analisar_ciclo(
+    indicadores: list, total_respondentes: int, comentarios: list
+) -> dict:
     user_prompt = (
         f"Indicadores por categoria (escala 1 a 5): {indicadores}. "
         f"Total de respondentes: {total_respondentes}. "

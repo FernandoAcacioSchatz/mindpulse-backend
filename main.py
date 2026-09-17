@@ -50,7 +50,7 @@ app.add_middleware(
     allow_origins=ORIGENS_PERMITIDAS,
     allow_credentials=True,  # obrigatório pro cookie httpOnly viajar entre domínios (Vercel <-> Render)
     allow_methods=["GET", "POST", "PATCH", "DELETE", "PUT"],
-    allow_headers=["Authorization", "X-API-Key", "Content-Type"],
+    allow_headers=["Authorization", "X-API-Key", "Content-Type", "apikey", "x-client-info"],
 )
 
 app.include_router(supabase_proxy.router)
