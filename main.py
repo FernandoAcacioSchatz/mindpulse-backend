@@ -29,7 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
-from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead
+from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead, supabase_proxy
 from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
 
 # Origens autorizadas a chamar o backend diretamente do navegador.
@@ -43,14 +43,17 @@ ORIGENS_PERMITIDAS = [
 ]
 
 
-app = FastAPI(title="Radar Backend", docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Radar Backend")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGENS_PERMITIDAS,
-    allow_methods=["GET", "POST"],
+    allow_credentials=True,  # obrigatório pro cookie httpOnly viajar entre domínios (Vercel <-> Render)
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "PUT"],
     allow_headers=["Authorization", "X-API-Key", "Content-Type"],
 )
+
+app.include_router(supabase_proxy.router)
 
 
 @app.middleware("http")

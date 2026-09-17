@@ -36,3 +36,10 @@ ADMIN_EMAILS = [
 # 'X-API-Key'. Gere uma string aleatória longa, nunca use um
 # valor previsível.
 BACKEND_API_KEY = os.environ.get("BACKEND_API_KEY", "")
+
+# Chave pública (anon/publishable) do Supabase -- é a mesma que hoje
+# fica hardcoded no frontend (não é segredo). O proxy usa ela em
+# TODA chamada repassada, no lugar da service_role -- assim RLS
+# continua valendo normalmente, igual valeria se o navegador
+# chamasse o Supabase direto.
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "sb_publishable_REU_k-pvp9jluFZ5PmkLLg_mGeZ0HYT")
