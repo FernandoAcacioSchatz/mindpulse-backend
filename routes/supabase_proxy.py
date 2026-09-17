@@ -49,6 +49,18 @@ def _obter_cliente_http() -> httpx.AsyncClient:
 
 NOME_COOKIE_SESSAO = "radar_sessao"
 
+# Nomes usados numa versão anterior (cookie carregava o token
+# completo em vez de um identificador curto) -- alguém que logou
+# antes dessa mudança pode ainda ter esses 2 cookies "presos" no
+# navegador, somando peso à sessão nova sem necessidade nenhuma.
+# Limpa os dois toda vez que uma sessão é criada ou encerrada.
+NOMES_COOKIES_ANTIGOS = ("radar_access_token", "radar_refresh_token")
+
+
+def _limpar_cookies_antigos(resposta: Response) -> None:
+    for nome in NOMES_COOKIES_ANTIGOS:
+        resposta.delete_cookie(nome, path="/")
+
 
 def _opcoes_cookie(request: Request) -> dict:
     """
@@ -153,6 +165,7 @@ async def proxy_login_ou_refresh(request: Request):
     if access_token:
         session_id = criar_sessao(access_token, refresh_token)
         resposta.set_cookie(NOME_COOKIE_SESSAO, session_id, max_age=60 * 60 * 24 * 7, **_opcoes_cookie(request))
+    _limpar_cookies_antigos(resposta)
 
     return resposta
 
@@ -165,6 +178,7 @@ async def proxy_logout(request: Request):
     remover_sessao(request.cookies.get(NOME_COOKIE_SESSAO))
     resposta = Response(status_code=204)
     resposta.delete_cookie(NOME_COOKIE_SESSAO, path="/")
+    _limpar_cookies_antigos(resposta)
     return resposta
 
 
