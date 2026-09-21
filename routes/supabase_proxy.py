@@ -98,19 +98,20 @@ def _extrair_token_do_cookie(request: Request) -> str | None:
 async def _repassar_para_supabase(request: Request, caminho: str) -> httpx.Response:
     """Repassa a chamada pro Supabase de verdade, com o token certo.
 
-    Copia TODOS os cabeçalhos que o navegador mandou (Prefer, Range,
-    Accept-Profile, etc. -- o supabase-js manda vários além de
-    apikey/Authorization, e cada um controla um comportamento
-    diferente do PostgREST, tipo "me devolve a linha que acabei de
-    criar"). Só remove os que não fazem sentido repassar (Host, o
-    Cookie -- que é NOSSO, o Supabase não usa -- e Content-Length,
-    que o httpx recalcula sozinho). Depois disso, sobrescreve
-    apikey/Authorization com os valores certos."""
+    Repassa só os cabeçalhos que o PostgREST realmente usa pra decidir
+    comportamento (Prefer, Range, Accept-Profile, Content-Profile,
+    Content-Type) -- NÃO repassa cabeçalhos de "impressão digital" de
+    navegador (Origin, Referer, sec-ch-ua, sec-fetch-*, User-Agent) --
+    isso é o meu SERVIDOR chamando o Supabase, servidor pra servidor,
+    e mandar esse tipo de cabeçalho nessa chamada parecia suspeito
+    pro Cloudflare do lado do Supabase, causando 400 intermitente.
+    """
     token = _extrair_token_do_cookie(request)
 
+    CABECALHOS_RELEVANTES = ("prefer", "range", "range-unit", "accept-profile", "content-profile", "content-type")
     cabecalhos = {
         chave: valor for chave, valor in request.headers.items()
-        if chave.lower() not in ("host", "cookie", "content-length", "connection")
+        if chave.lower() in CABECALHOS_RELEVANTES
     }
     cabecalhos["apikey"] = SUPABASE_ANON_KEY
     # Só anexa Authorization com o token se existir sessão -- sem isso,
