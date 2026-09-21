@@ -108,7 +108,7 @@ async def _repassar_para_supabase(request: Request, caminho: str) -> httpx.Respo
     """
     token = _extrair_token_do_cookie(request)
 
-    CABECALHOS_RELEVANTES = ("prefer", "range", "range-unit", "accept-profile", "content-profile", "content-type")
+    CABECALHOS_RELEVANTES = ("accept", "prefer", "range", "range-unit", "accept-profile", "content-profile", "content-type")
     cabecalhos = {
         chave: valor for chave, valor in request.headers.items()
         if chave.lower() in CABECALHOS_RELEVANTES
