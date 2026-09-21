@@ -220,11 +220,6 @@ async def proxy_rest(request: Request, caminho: str):
     tem token nenhum dentro, só o resultado da consulta em si.
     """
     resp = await _repassar_para_supabase(request, f"rest/v1/{caminho}")
-    if resp.status_code >= 400:
-        # LOG TEMPORÁRIO -- pra descobrir o motivo exato que o
-        # Supabase está dando nas falhas intermitentes. Remover
-        # depois de identificar a causa.
-        print(f"[DEBUG-400] caminho=rest/v1/{caminho} status={resp.status_code} corpo={resp.text[:500]!r}", flush=True)
     return _resposta_repassada(resp)
 
 
