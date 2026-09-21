@@ -57,9 +57,14 @@ NOME_COOKIE_SESSAO = "radar_sessao"
 NOMES_COOKIES_ANTIGOS = ("radar_access_token", "radar_refresh_token")
 
 
-def _limpar_cookies_antigos(resposta: Response) -> None:
+def _limpar_cookies_antigos(resposta: Response, request: Request) -> None:
+    # Precisa usar EXATAMENTE os mesmos atributos (secure, samesite)
+    # que foram usados pra criar o cookie -- se não bater, o navegador
+    # não reconhece como "apagar o mesmo cookie" e cria um outro do
+    # lado, com valor vazio, sem nunca remover o original de verdade.
+    opcoes = _opcoes_cookie(request)
     for nome in NOMES_COOKIES_ANTIGOS:
-        resposta.delete_cookie(nome, path="/")
+        resposta.delete_cookie(nome, path="/", secure=opcoes["secure"], samesite=opcoes["samesite"])
 
 
 def _opcoes_cookie(request: Request) -> dict:
@@ -165,7 +170,7 @@ async def proxy_login_ou_refresh(request: Request):
     if access_token:
         session_id = criar_sessao(access_token, refresh_token)
         resposta.set_cookie(NOME_COOKIE_SESSAO, session_id, max_age=60 * 60 * 24 * 7, **_opcoes_cookie(request))
-    _limpar_cookies_antigos(resposta)
+    _limpar_cookies_antigos(resposta, request)
 
     return resposta
 
@@ -177,8 +182,9 @@ async def proxy_logout(request: Request):
     await _repassar_para_supabase(request, "auth/v1/logout")
     remover_sessao(request.cookies.get(NOME_COOKIE_SESSAO))
     resposta = Response(status_code=204)
-    resposta.delete_cookie(NOME_COOKIE_SESSAO, path="/")
-    _limpar_cookies_antigos(resposta)
+    opcoes = _opcoes_cookie(request)
+    resposta.delete_cookie(NOME_COOKIE_SESSAO, path="/", secure=opcoes["secure"], samesite=opcoes["samesite"])
+    _limpar_cookies_antigos(resposta, request)
     return resposta
 
 
@@ -213,6 +219,11 @@ async def proxy_rest(request: Request, caminho: str):
     tem token nenhum dentro, só o resultado da consulta em si.
     """
     resp = await _repassar_para_supabase(request, f"rest/v1/{caminho}")
+    if resp.status_code >= 400:
+        # LOG TEMPORÁRIO -- pra descobrir o motivo exato que o
+        # Supabase está dando nas falhas intermitentes. Remover
+        # depois de identificar a causa.
+        print(f"[DEBUG-400] caminho=rest/v1/{caminho} status={resp.status_code} corpo={resp.text[:500]!r}", flush=True)
     return _resposta_repassada(resp)
 
 
