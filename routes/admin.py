@@ -18,8 +18,27 @@ from clients.supabase_client import supabase
 
 
 def gerar_senha_temporaria(tamanho: int = 14) -> str:
-    alfabeto = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alfabeto) for _ in range(tamanho))
+    # Garante pelo menos 1 caractere de cada tipo -- o Supabase, com a
+    # política de senha que você configurou (maiúscula + minúscula +
+    # número + símbolo), recusava a senha gerada antes porque ela
+    # nunca tinha símbolo nenhum (só letra e número).
+    minusculas = string.ascii_lowercase
+    maiusculas = string.ascii_uppercase
+    digitos = string.digits
+    simbolos = "!@#$%^&*()-_=+"
+
+    obrigatorios = [
+        secrets.choice(minusculas),
+        secrets.choice(maiusculas),
+        secrets.choice(digitos),
+        secrets.choice(simbolos),
+    ]
+    alfabeto_completo = minusculas + maiusculas + digitos + simbolos
+    resto = [secrets.choice(alfabeto_completo) for _ in range(tamanho - len(obrigatorios))]
+
+    senha = obrigatorios + resto
+    secrets.SystemRandom().shuffle(senha)  # embaralha, senão os 4 primeiros caracteres seguem sempre o mesmo padrão
+    return ''.join(senha)
 
 
 def provisionar_empresa(empresa_nome: str, empresa_cnpj: str | None, rh_nome: str, rh_email: str) -> dict:
@@ -41,10 +60,14 @@ def provisionar_empresa(empresa_nome: str, empresa_cnpj: str | None, rh_nome: st
         supabase.table("empresa").delete().eq("id", empresa["id"]).execute()
 
         texto_erro = str(e)
+        print(f"[admin] erro ao criar login para {rh_email}: {texto_erro}", flush=True)  # log real, pra dar pra investigar
+
         if "already been registered" in texto_erro or "already registered" in texto_erro:
             mensagem = f"O e-mail {rh_email} já está cadastrado em outra empresa. Use um e-mail diferente para esse RH."
+        elif "password" in texto_erro.lower() or "weak" in texto_erro.lower():
+            mensagem = "A senha gerada automaticamente não atendeu à política de senha do Supabase. Verifique os logs do Render para o motivo exato."
         else:
-            mensagem = "Não foi possível criar o login. Tente novamente em instantes."
+            mensagem = "Não foi possível criar o login. Verifique os logs do Render para o motivo exato."
 
         raise HTTPException(400, mensagem)
 
