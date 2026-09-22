@@ -26,6 +26,7 @@ chamada chegar no Supabase.
 """
 import httpx
 from fastapi import APIRouter, Request, Response
+from fastapi.responses import JSONResponse
 
 from config import SUPABASE_URL, SUPABASE_ANON_KEY
 from clients.sessoes import criar_sessao, obter_access_token, remover_sessao
@@ -187,6 +188,40 @@ async def proxy_logout(request: Request):
     resposta.delete_cookie(NOME_COOKIE_SESSAO, path="/", secure=opcoes["secure"], samesite=opcoes["samesite"])
     _limpar_cookies_antigos(resposta, request)
     return resposta
+
+
+@router.post("/supabase-proxy/recuperar-senha")
+async def recuperar_senha(request: Request):
+    """
+    Fluxo de "esqueci minha senha": o link que o Supabase manda por
+    e-mail chega com um token de recuperação no próprio endereço
+    (#access_token=...&type=recovery) -- de curtíssima duração, só
+    pra essa ação específica. O resto do app desliga de propósito a
+    leitura automática desse token (detectSessionInUrl: false), já
+    que usa cookie pra tudo -- então essa é a ÚNICA rota do proxy
+    que aceita um token vindo direto do pedido em si, em vez de
+    resolver pelo cookie, porque nesse momento a pessoa ainda não
+    tem sessão nenhuma estabelecida, só esse token avulso que acabou
+    de clicar no link.
+    """
+    corpo = await request.json()
+    token_recuperacao = corpo.get("token")
+    nova_senha = corpo.get("senha")
+    if not token_recuperacao or not nova_senha:
+        return JSONResponse({"error": "dados incompletos"}, status_code=400)
+
+    cliente = _obter_cliente_http()
+    resp = await cliente.put(
+        f"{SUPABASE_URL}/auth/v1/user",
+        headers={
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {token_recuperacao}",
+            "Content-Type": "application/json",
+        },
+        json={"password": nova_senha},
+        timeout=15.0,
+    )
+    return _resposta_repassada(resp)
 
 
 @router.api_route("/supabase-proxy/auth/v1/{caminho:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
