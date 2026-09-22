@@ -189,6 +189,22 @@ async def proxy_logout(request: Request):
     return resposta
 
 
+@router.api_route("/supabase-proxy/auth/v1/{caminho:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy_auth_generico(request: Request, caminho: str):
+    """
+    Cobre qualquer outro endpoint de autenticação que não seja login
+    ou logout (que já têm rota própria, tratados acima) -- por
+    exemplo reauthenticate (pedir código de confirmação) e o
+    updateUser (trocar senha/e-mail com o código), usados na tela de
+    perfil. Sem essa rota genérica, qualquer chamada de autenticação
+    que eu não previsse especificamente ficava sem nenhuma rota
+    correspondente aqui no proxy, e nunca chegava no Supabase de
+    verdade.
+    """
+    resp = await _repassar_para_supabase(request, f"auth/v1/{caminho}")
+    return _resposta_repassada(resp)
+
+
 @router.get("/supabase-proxy/session/me")
 async def sessao_atual(request: Request):
     """
