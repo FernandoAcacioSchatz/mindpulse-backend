@@ -47,6 +47,23 @@ def processar(payload: dict) -> dict:
     pesquisa_id = payload["pesquisa_id"]
     ciclo_id = payload["ciclo_id"]
 
+    # Proteção contra reprocessamento: agora que essa função roda em
+    # segundo plano (ver rota_encerrar_pesquisa em main.py), a resposta
+    # HTTP volta antes de terminar -- então clicar de novo (ex: achando
+    # que "não aconteceu nada" por causa da demora) é bem mais fácil de
+    # acontecer. Sem isso, cada chamada duplicada gerava indicadores,
+    # alertas e relatório de IA duplicados (tudo é INSERT, nunca upsert).
+    # Não cobre 100% (duas chamadas na mesma fração de segundo ainda
+    # passam as duas), mas cobre o caso comum de clicar de novo minutos
+    # depois.
+    pesquisa_atual = supabase.table("pesquisa").select("status").eq("id", pesquisa_id).maybe_single().execute()
+    status_atual = pesquisa_atual.data.get("status") if pesquisa_atual and pesquisa_atual.data else None
+    if status_atual is not None and status_atual != "enviada":
+        return {
+            "status": "ja_processada_ou_em_andamento",
+            "mensagem": "Essa pesquisa já foi encerrada (ou o encerramento já está em andamento) — nada foi processado de novo.",
+        }
+
     resposta_ciclo = supabase.table("ciclo").select("empresa_id").eq("id", ciclo_id).single().execute()
     ciclo = resposta_ciclo.data if resposta_ciclo else None
     if not ciclo:
