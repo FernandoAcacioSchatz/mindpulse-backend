@@ -1,7 +1,3 @@
-"""
-Cliente Brevo — equivalente aos nodes HTTP Request de envio de
-e-mail no n8n.
-"""
 import httpx
 from config import BREVO_API_KEY, BREVO_SENDER_EMAIL
 

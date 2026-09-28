@@ -1,11 +1,3 @@
-"""
-Notifica a equipe Radar (ADMIN_EMAILS) quando alguém preenche o
-formulário de contato do site comercial.
-
-Chamado pelo Supabase Database Webhook (evento INSERT na tabela
-'lead') -- mesmo mecanismo já usado pro alerta crítico, só que
-apontando pra essa rota em vez daquela.
-"""
 from clients.brevo_client import enviar_email
 from config import ADMIN_EMAILS
 

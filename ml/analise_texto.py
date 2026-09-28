@@ -61,7 +61,6 @@ _PALAVRAS_NEGATIVAS = {
 
 
 def analisar_sentimento(texto: str) -> str:
-    """Retorna 'positivo', 'negativo' ou 'neutro', por contagem de léxico."""
     palavras = texto.lower().split()
     pos = sum(1 for p in palavras if p in _PALAVRAS_POSITIVAS)
     neg = sum(1 for p in palavras if p in _PALAVRAS_NEGATIVAS)
@@ -73,14 +72,8 @@ def analisar_sentimento(texto: str) -> str:
 
 
 def classificar_tema(texto: str) -> dict:
-    """
-    Retorna a categoria mais provável do comentário, com a confiança
-    do modelo (0 a 1) — a confiança importa: se for baixa, o RH não
-    deveria confiar cegamente na classificação.
-    """
     X = _vetorizador.transform([texto])
     categoria = _classificador_tema.predict(X)[0]
-    # proporção dos vizinhos mais próximos que concordam com a categoria escolhida
     vizinhos = _classificador_tema.kneighbors(X, return_distance=False)[0]
     rotulos_vizinhos = (
         _classificador_tema._y[vizinhos] if hasattr(_classificador_tema, "_y") else None
@@ -90,7 +83,6 @@ def classificar_tema(texto: str) -> dict:
 
 
 def analisar_comentario(texto: str) -> dict:
-    """Função principal — chama as duas análises juntas."""
     if not texto or not texto.strip():
         return {"tem_conteudo": False}
 

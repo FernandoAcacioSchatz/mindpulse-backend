@@ -1,22 +1,3 @@
-"""
-Segurança do backend.
-
-Dois esquemas de autenticação, cada um pro tipo certo de chamador:
-
-1. JWT do Supabase (Bearer token) — para chamadas que vêm de um RH
-   LOGADO na tela (ex: clicar em "Encerrar pesquisa"). Reaproveita
-   o mesmo token que o Supabase Auth já emite no login — não
-   inventamos um sistema de login paralelo.
-
-2. Chave de sistema (X-API-Key) — para chamadas de sistema pra
-   sistema, sem usuário envolvido: o Supabase Database Webhook
-   chamando /notificar-alerta-critico, ou testes manuais dos
-   endpoints de /executar/*.
-
-Usa fastapi.security, então o /docs ganha um botão "Authorize"
-de verdade — autoriza uma vez, testa todos os endpoints protegidos
-sem repetir o token a cada chamada.
-"""
 import jwt
 from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, Request
@@ -26,19 +7,12 @@ from clients.supabase_client import supabase
 from clients.sessoes import obter_access_token
 from config import ADMIN_EMAILS, BACKEND_API_KEY, SUPABASE_URL
 
-# auto_error=False -- se não vier cabeçalho, não estoura erro sozinho;
-# a função abaixo decide, porque agora tem uma segunda fonte válida
-# (o cookie httpOnly). Rotas migradas pro cookie não mandam mais esse
-# cabeçalho -- ele fica só pra quem ainda não migrou.
 _bearer_scheme = HTTPBearer(description="Token de sessão do Supabase Auth (RH logado)", auto_error=False)
 _api_key_scheme = APIKeyHeader(name="X-API-Key", description="Chave de sistema, para chamadas automatizadas")
 
 NOME_COOKIE_SESSAO = "radar_sessao"
 
 
-# Seu projeto usa o sistema novo de chaves assimétricas do Supabase
-# (ECC P-256) -- verificamos com a chave PÚBLICA, buscada automaticamente
-# do endpoint JWKS do próprio projeto. Nenhum segredo pra guardar aqui.
 _jwks_url = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
 _jwk_client = PyJWKClient(_jwks_url, cache_keys=True)
 
@@ -57,14 +31,6 @@ def verificar_jwt_supabase(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
 ) -> dict:
-    """
-    Valida o JWT emitido pelo Supabase Auth. Aceita 2 origens, nessa
-    ordem de preferência:
-    1. Cookie httpOnly (radar_access_token) -- caminho novo, seguro
-       contra XSS, usado pelas telas já migradas.
-    2. Cabeçalho Authorization -- caminho antigo, mantido só durante
-       a transição das telas que ainda não foram atualizadas.
-    """
     token = obter_access_token(request.cookies.get(NOME_COOKIE_SESSAO))
     if not token and credentials:
         token = credentials.credentials
@@ -74,14 +40,6 @@ def verificar_jwt_supabase(
 
 
 def verificar_rh_pertence_a_empresa(auth_user_id: str, empresa_id: str) -> None:
-    """
-    Checagem de autorização (além da autenticação acima): confirma
-    que o usuário logado é RH ativo DAQUELA empresa específica.
-
-    Necessário porque o backend usa a service_role key, que ignora
-    RLS — esta função substitui manualmente a proteção que o RLS
-    dá de graça pro front-end.
-    """
     resposta = (
         supabase.table("usuario_rh")
         .select("empresa_id, ativo")
@@ -97,7 +55,6 @@ def verificar_rh_pertence_a_empresa(auth_user_id: str, empresa_id: str) -> None:
 
 
 def verificar_chave_sistema(chave: str = Depends(_api_key_scheme)) -> None:
-    """Protege endpoints chamados por sistema, não por um RH logado."""
     if not BACKEND_API_KEY:
         raise HTTPException(500, "BACKEND_API_KEY não configurada no servidor.")
     if chave != BACKEND_API_KEY:
@@ -105,11 +62,6 @@ def verificar_chave_sistema(chave: str = Depends(_api_key_scheme)) -> None:
 
 
 def verificar_admin(auth: dict = Depends(verificar_jwt_supabase)) -> dict:
-    """
-    Protege as rotas de /admin — exige um JWT válido E que o e-mail
-    do token esteja na lista da equipe Radar (ADMIN_EMAILS).
-    Nenhum RH de cliente passa por aqui, mesmo logado.
-    """
     if not ADMIN_EMAILS:
         raise HTTPException(500, "ADMIN_EMAILS não configurado no servidor.")
     if auth.get("email") not in ADMIN_EMAILS:

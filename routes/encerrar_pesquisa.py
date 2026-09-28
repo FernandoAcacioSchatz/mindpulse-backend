@@ -13,12 +13,16 @@ from datetime import datetime, timezone
 from collections import defaultdict, Counter
 
 from clients.supabase_client import com_nova_tentativa, supabase
-from clients.gemini_client import analisar_ciclo
-from ml.qualidade_resposta import avaliar_qualidade, resumo_qualidade_ciclo
-from ml.classificador_comentarios import classificar_comentario
-from ml.analise_texto import analisar_comentario
-from ml.classificador_knn import classificar_por_knn
-from ml.indice_preditivo import avaliar as avaliar_indice
+
+# ATENÇÃO: os imports de ml.* e do cliente Gemini ficam de propósito
+# FORA do topo do arquivo (ver dentro de processar()). São eles que
+# puxam scikit-learn + pandas + numpy + o joblib de ~2.7MB do KNN --
+# se ficarem aqui, esse custo é pago sempre que o processo sobe,
+# inclusive só pra responder "/" (o healthcheck que o cron externo
+# usa pra manter o Render acordado). Em cold start no plano free do
+# Render isso pode ser a diferença entre acordar a tempo ou o Render
+# desistir e devolver x-render-routing: hibernate-wake-error. Como
+# só o /encerrar-pesquisa usa isso, o import fica lá, sob demanda.
 
 
 LIMITE_INDICADOR_BAIXO = 2.5
@@ -27,6 +31,19 @@ MINIMO_RESPOSTAS_POR_INDICADOR = 5
 
 
 def processar(payload: dict) -> dict:
+    # Import pesado feito aqui (na primeira chamada), não no boot do
+    # processo -- ver nota acima. 'global' garante que as funções
+    # auxiliares abaixo (ex: _avaliar_qualidade_respostas) continuem
+    # enxergando esses nomes normalmente depois da primeira chamada.
+    global avaliar_qualidade, resumo_qualidade_ciclo, classificar_comentario
+    global analisar_comentario, classificar_por_knn, avaliar_indice, analisar_ciclo
+    from clients.gemini_client import analisar_ciclo
+    from ml.qualidade_resposta import avaliar_qualidade, resumo_qualidade_ciclo
+    from ml.classificador_comentarios import classificar_comentario
+    from ml.analise_texto import analisar_comentario
+    from ml.classificador_knn import classificar_por_knn
+    from ml.indice_preditivo import avaliar as avaliar_indice
+
     pesquisa_id = payload["pesquisa_id"]
     ciclo_id = payload["ciclo_id"]
 

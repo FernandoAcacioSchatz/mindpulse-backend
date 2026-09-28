@@ -1,13 +1,3 @@
-"""
-Rotas de administração da plataforma — SÓ o dono do Radar (você)
-tem acesso, nunca o RH de um cliente.
-
-Propositalmente NÃO existe nenhuma rota aqui que devolva dados de
-pesquisa/resposta/indicador de qualquer empresa — a única coisa que
-esse módulo faz é PROVISIONAR (criar empresa + primeiro login),
-nunca visualizar conteúdo sensível de cliente. Ver Documento 3
-(regras de anonimato) — isso vale também pra você.
-"""
 import secrets
 import string
 from datetime import datetime, timezone
@@ -18,10 +8,6 @@ from clients.supabase_client import supabase
 
 
 def gerar_senha_temporaria(tamanho: int = 14) -> str:
-    # Garante pelo menos 1 caractere de cada tipo -- o Supabase, com a
-    # política de senha que você configurou (maiúscula + minúscula +
-    # número + símbolo), recusava a senha gerada antes porque ela
-    # nunca tinha símbolo nenhum (só letra e número).
     minusculas = string.ascii_lowercase
     maiusculas = string.ascii_uppercase
     digitos = string.digits
@@ -37,30 +23,27 @@ def gerar_senha_temporaria(tamanho: int = 14) -> str:
     resto = [secrets.choice(alfabeto_completo) for _ in range(tamanho - len(obrigatorios))]
 
     senha = obrigatorios + resto
-    secrets.SystemRandom().shuffle(senha)  # embaralha, senão os 4 primeiros caracteres seguem sempre o mesmo padrão
+    secrets.SystemRandom().shuffle(senha)
     return ''.join(senha)
 
 
 def provisionar_empresa(empresa_nome: str, empresa_cnpj: str | None, rh_nome: str, rh_email: str) -> dict:
-    # 1. Cria a empresa
     empresa = supabase.table("empresa").insert({
         "nome": empresa_nome, "cnpj": empresa_cnpj,
     }).execute().data[0]
 
-    # 2. Cria o login (via Admin API — só funciona com service_role key)
     senha_temporaria = gerar_senha_temporaria()
     try:
         resultado_auth = supabase.auth.admin.create_user({
             "email": rh_email,
             "password": senha_temporaria,
-            "email_confirm": True,  # não exige confirmação por e-mail
+            "email_confirm": True,
         })
     except Exception as e:
-        # limpa a empresa criada no passo 1, pra não deixar lixo pela metade
         supabase.table("empresa").delete().eq("id", empresa["id"]).execute()
 
         texto_erro = str(e)
-        print(f"[admin] erro ao criar login para {rh_email}: {texto_erro}", flush=True)  # log real, pra dar pra investigar
+        print(f"[admin] erro ao criar login para {rh_email}: {texto_erro}", flush=True)
 
         if "already been registered" in texto_erro or "already registered" in texto_erro:
             mensagem = f"O e-mail {rh_email} já está cadastrado em outra empresa. Use um e-mail diferente para esse RH."
@@ -73,7 +56,6 @@ def provisionar_empresa(empresa_nome: str, empresa_cnpj: str | None, rh_nome: st
 
     auth_user_id = resultado_auth.user.id
 
-    # 3. Vincula o login à empresa
     usuario_rh = supabase.table("usuario_rh").insert({
         "empresa_id": empresa["id"],
         "nome": rh_nome,
@@ -93,12 +75,6 @@ def provisionar_empresa(empresa_nome: str, empresa_cnpj: str | None, rh_nome: st
 
 
 def atualizar_status_lead(lead_id: str, campo: str, marcar: bool, email_admin: str) -> dict:
-    """
-    Marca (ou desmarca) um lead como visto ou respondido, sempre
-    gravando quem fez isso e quando -- nunca um campo de texto livre
-    pra digitar nome, pra não ter "João" e "joao" como pessoas
-    diferentes no rastro de auditoria.
-    """
     if campo not in ("visto", "respondido"):
         raise HTTPException(400, "Campo inválido -- use 'visto' ou 'respondido'.")
 
@@ -117,9 +93,6 @@ def atualizar_status_lead(lead_id: str, campo: str, marcar: bool, email_admin: s
 
 
 def salvar_observacao_lead(lead_id: str, observacoes: str) -> dict:
-    """Anotação livre sobre o lead -- o que já foi combinado, retorno
-    do cliente, próximo passo, etc. Sobrescreve o texto anterior (é
-    1 campo de anotação corrente, não um histórico de comentários)."""
     resultado = supabase.table("lead").update({"observacoes": observacoes}).eq("id", lead_id).execute().data
     if not resultado:
         raise HTTPException(404, "Lead não encontrado.")
@@ -127,12 +100,6 @@ def salvar_observacao_lead(lead_id: str, observacoes: str) -> dict:
 
 
 def listar_empresas() -> list[dict]:
-    """
-    Visão operacional de todas as empresas clientes -- quantidade de
-    funcionário e de ciclo, e o status do ciclo mais recente. NUNCA
-    devolve score, indicador, sentimento ou qualquer resultado de
-    pesquisa -- só o essencial pra saber "quem está usando o quê".
-    """
     empresas = supabase.table("empresa").select("id, nome").order("nome").execute().data or []
 
     resultado = []
@@ -172,10 +139,6 @@ def listar_empresas() -> list[dict]:
 
 
 def detalhar_empresa(empresa_id: str) -> dict:
-    """
-    Linha do tempo operacional de 1 empresa -- cada ciclo com status e
-    taxa de resposta (quantos de quantos), sem score nem indicador.
-    """
     empresa = supabase.table("empresa").select("id, nome, cnpj").eq("id", empresa_id).maybe_single().execute().data
     if not empresa:
         raise HTTPException(404, "Empresa não encontrada.")

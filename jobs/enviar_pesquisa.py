@@ -1,25 +1,3 @@
-"""
-Equivalente ao workflow n8n 'Enviar Pesquisa (v2 corrigido)' —
-migração completa.
-
-Melhoria em relação à versão n8n: processa TODAS as pesquisas
-agendadas numa execução, não só 1 (era uma limitação conhecida
-do node "limit: 1", documentada no Documento 10).
-
-Idempotente: se rodar 2x por engano, não duplica token nem manda
-e-mail 2x — verifica se o token já existe antes de criar.
-
-Envio de e-mail EM PARALELO CONTROLADO (ThreadPoolExecutor, não
-1-a-1): criar token é rápido (banco), mas mandar e-mail é uma
-chamada de rede -- esperar 1000 chamadas sequenciais levaria uns
-5 minutos à toa. 15 envios simultâneos equilibra velocidade sem
-sobrecarregar a API da Brevo (que aceita bem mais que isso).
-
-IMPORTANTE: no plano gratuito da Brevo existe um teto de 300
-e-mails/dia -- isso não é resolvido por código nenhum, é limite
-de conta. Cliente grande = upgrade de plano na Brevo, não mais
-threads.
-"""
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 
@@ -73,7 +51,6 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
 
     expira_em = (datetime.now(timezone.utc) + timedelta(hours=prazo_horas)).isoformat()
 
-    # ---- Passo 1: cria todos os tokens primeiro (rápido, só banco, sequencial está ok) ----
     fila_de_envio = []
     for funcionario in funcionarios:
         resposta_existente = (
@@ -86,7 +63,7 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         )
         existente = resposta_existente.data if resposta_existente else None
         if existente:
-            continue  # já processado numa execução anterior — idempotência
+            continue
 
         resposta_token = (
             supabase.table("token_resposta")
@@ -99,7 +76,6 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         token = resposta_token.data[0]
         fila_de_envio.append((funcionario, token))
 
-    # ---- Passo 2: envia os e-mails em paralelo controlado (a parte lenta) ----
     emails_enviados = 0
     emails_com_erro = 0
 

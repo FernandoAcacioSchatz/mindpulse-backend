@@ -1,27 +1,3 @@
-"""
-Cliente Gemini — substitui o antigo openai_client.py.
-
-Usa a própria biblioteca 'openai' (já estava no requirements.txt,
-não precisou instalar nada novo) apontando pra API do Gemini —
-o Google oferece uma camada de compatibilidade com o formato da
-OpenAI, então o resto do código (montagem do prompt, leitura da
-resposta) não precisou mudar quase nada.
-
-Saída estruturada (Pydantic + response_format): em vez de pedir
-"responda em JSON" no prompt e torcer pra vir certo, a API valida
-o formato antes de devolver -- elimina a gambiarra antiga de tirar
-```json``` na mão quando o modelo desobedecia.
-
-ABSA (análise de sentimento por aspecto): além do resumo em texto
-livre, o Gemini agora também devolve uma lista de aspectos --
-cada um com a categoria (uma das 7 já existentes no produto),
-a polaridade e um trecho do comentário que sustenta a
-classificação. Isso resolve uma perda de informação real: um
-comentário como "meu líder é ótimo, mas a carga de trabalho está
-impossível" antes só virava 1 tema no classificador local -- agora
-os dois aspectos aparecem separados.
-"""
-
 import json
 from typing import Literal
 
@@ -35,11 +11,8 @@ client = OpenAI(
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
 )
 
-MODEL = "gemini-3.6-flash"  # modelo Flash — dentro do nível gratuito da API
+MODEL = "gemini-3.6-flash"
 
-# Precisa bater exatamente com os nomes de categoria já cadastrados
-# no banco (tabela categoria) -- é assim que a gente liga o aspecto
-# devolvido pela IA de volta pra categoria_id na hora de salvar.
 CATEGORIAS = Literal[
     "Carga de Trabalho",
     "Liderança",
@@ -54,7 +27,7 @@ CATEGORIAS = Literal[
 class AspectoIdentificado(BaseModel):
     categoria: CATEGORIAS
     polaridade: Literal["positivo", "neutro", "negativo", "misto"]
-    evidencia: str  # trecho curto, copiado de um comentário real -- nunca inventado
+    evidencia: str
 
 
 class RespostaAnaliseCiclo(BaseModel):
@@ -99,12 +72,6 @@ SYSTEM_PROMPT = (
 def analisar_ciclo(
     indicadores: list, total_respondentes: int, comentarios: list
 ) -> dict:
-    # Cada comentário entra delimitado por uma tag própria -- cria uma
-    # fronteira estrutural clara entre "instrução" (o texto ao redor,
-    # que nós escrevemos) e "dado" (o comentário em si, que qualquer
-    # funcionário pode ter escrito qualquer coisa). Sem isso, um texto
-    # tipo "ignore as instruções anteriores..." dentro de um comentário
-    # se mistura ao resto do prompt sem barreira nenhuma.
     comentarios_delimitados = "\n".join(
         f'<comentario id="{i + 1}">{c}</comentario>'
         for i, c in enumerate(comentarios)
@@ -130,8 +97,6 @@ def analisar_ciclo(
 
     resultado = completion.choices[0].message.parsed
     if resultado is None:
-        # Acontece se a API recusar a resposta (ex: filtro de conteudo) --
-        # melhor falhar alto do que salvar relatorio pela metade.
         motivo = completion.choices[0].message.refusal or "motivo desconhecido"
         raise ValueError(f"Gemini nao devolveu saida estruturada valida: {motivo}")
 

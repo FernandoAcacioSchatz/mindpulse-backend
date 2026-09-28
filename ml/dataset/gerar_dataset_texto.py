@@ -1,26 +1,9 @@
-"""
-Gera um dataset de ~500 frases de comentário de pesquisa, distribuídas
-nas 7 categorias do produto, com frases BOAS e RUINS em cada uma —
-de propósito, pra o classificador de TEMA aprender a reconhecer o
-assunto independente do sentimento (evita que ele "aprenda" sentimento
-por engano, achando que é tema).
-
-IMPORTANTE: as frases-base foram escritas à mão (curadoria humana,
-uma por uma), e depois passam por variação sistemática (troca de
-palavra por sinônimo, jeito de começar a frase) pra multiplicar a
-quantidade mantendo qualidade. Não são 500 frases 100% independentes
-— é honesto declarar isso, inclusive na banca.
-"""
 import csv
 import itertools
 import random
 
 random.seed(42)
 
-# ============================================================
-# Frases-base por categoria — escritas à mão, comentário real
-# de pesquisa de clima organizacional
-# ============================================================
 BASE = {
     "carga_trabalho": {
         "bom": [
@@ -164,10 +147,6 @@ BASE = {
     },
 }
 
-# ============================================================
-# Variação sistemática — multiplica as frases-base mantendo
-# qualidade, trocando o jeito de abrir a frase
-# ============================================================
 PREFIXOS = [
     "", "Sinceramente, ", "No geral, ", "Ultimamente, ", "Para ser honesto, ",
     "Na minha experiência, ", "De forma geral, ", "Recentemente, ",
@@ -194,7 +173,6 @@ def main():
     linhas = []
     for categoria, grupos in BASE.items():
         for sentimento, frases_base in grupos.items():
-            # ~5 variações por frase-base -> ~35 por sentimento -> ~70 por categoria
             for frase_base in frases_base:
                 for variacao in gerar_variacoes(frase_base, 5):
                     linhas.append({"frase": variacao, "categoria": categoria, "sentimento": sentimento})

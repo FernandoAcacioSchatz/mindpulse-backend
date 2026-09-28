@@ -1,11 +1,3 @@
-"""
-Equivalente ao workflow n8n 'Notificar Alerta Critico (v2 corrigido)' —
-migração completa.
-
-Continua sendo chamado pelo Supabase Database Webhook (evento
-INSERT na tabela relatorio_ia) — só troca a URL de destino do
-webhook pra apontar pra este backend em vez do n8n.
-"""
 from clients.supabase_client import supabase
 from clients.brevo_client import enviar_email
 from config import BASE_URL_FRONTEND

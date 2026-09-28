@@ -1,11 +1,3 @@
-"""
-Segundo (e último) lembrete da cascata: dispara 3h depois do
-PRIMEIRO lembrete, só pra quem ainda não respondeu e ainda não
-recebeu esse segundo aviso.
-
-Roda todo dia às 11h (3h depois do primeiro lembrete, às 8h).
-Também pode ser disparado manualmente via POST /executar/lembrete-segundo.
-"""
 from datetime import datetime, timezone
 
 from clients.supabase_client import supabase

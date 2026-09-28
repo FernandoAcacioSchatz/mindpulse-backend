@@ -1,15 +1,3 @@
-"""
-Encerramento automático de pesquisas vencidas.
-
-Roda todo dia às 10h (depois do lembrete às 8h e do envio às 9h) —
-verifica pesquisas com status 'enviada' cujo prazo já passou
-(enviada_em + prazo_horas), e encerra sozinho: reaproveita a MESMA
-função que o botão manual usa (routes/encerrar_pesquisa.processar),
-sem duplicar nenhuma lógica de cálculo.
-
-Também pode ser disparado manualmente via POST /executar/encerrar-automatico,
-útil pra testar sem esperar o horário.
-"""
 from datetime import datetime, timezone
 
 from clients.supabase_client import supabase
@@ -32,14 +20,14 @@ def rodar() -> dict:
 
     for pesquisa in pesquisas:
         if not pesquisa.get("enviada_em"):
-            continue  # nunca foi enviada de verdade, não deveria estar 'enviada' -- pula por segurança
+            continue
 
         enviada_em = datetime.fromisoformat(pesquisa["enviada_em"])
         prazo_horas = pesquisa.get("prazo_horas") or 72
         horas_passadas = (agora - enviada_em).total_seconds() / 3600
 
         if horas_passadas < prazo_horas:
-            continue  # ainda dentro do prazo, não mexe
+            continue
 
         try:
             resultado = processar_encerramento({"pesquisa_id": pesquisa["id"], "ciclo_id": pesquisa["ciclo_id"]})

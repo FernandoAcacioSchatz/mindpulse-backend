@@ -1,27 +1,6 @@
-"""
-Classificador de comentários abertos — decide se um comentário
-sinaliza necessidade de intervenção da empresa.
-
-FASE 1 (aqui): regras + padrões de texto, 100% explicável — cada
-classificação vem acompanhada do motivo exato. Isso segue o mesmo
-princípio do cálculo de score (Documento 3): numa auditoria, você
-precisa conseguir justificar "por que isso foi marcado como
-urgente", não apenas apontar pra uma caixa-preta.
-
-Roda 100% local, sem chamar nenhuma API externa — nenhum comentário
-sensível sai da sua infraestrutura. Zero dependência nova.
-
-FASE 2 (futuro): quando `alerta_feedback` (ver 20-tabela-alerta-feedback.sql)
-acumular confirmações reais do RH, esse vira o dataset rotulado
-pra treinar de verdade um modelo (fine-tune de um BERT em
-português) nos dados reais do MindPulse — não antes disso.
-"""
 import re
 from typing import Optional
 
-# Temas de risco alto — qualquer menção aciona prioridade máxima,
-# independente do restante da análise. Mantido em nível de padrão
-# (não é uma lista exaustiva), suficiente pra rotear pro RH agir.
 TEMAS_RISCO_ALTO = {
     "risco_a_vida": [
         r"quero morrer",
@@ -48,8 +27,6 @@ TEMAS_RISCO_ALTO = {
     ],
 }
 
-# Temas de atenção — não disparam prioridade máxima sozinhos, mas
-# somam ao nível de urgência quando aparecem em conjunto.
 TEMAS_ATENCAO = [
     r"esgotad[oa]", r"burnout", r"n[aã]o aguento (mais )?a rotina",
     r"chorei? no trabalho", r"ansiedade", r"crise de p[aâ]nico",
@@ -58,10 +35,6 @@ TEMAS_ATENCAO = [
 
 
 def classificar_comentario(texto: Optional[str]) -> dict:
-    """
-    Recebe o texto de um comentário aberto e devolve a classificação
-    de urgência (baixa / media / alta), sempre com o motivo explícito.
-    """
     if not texto or not texto.strip():
         return {
             "tem_conteudo": False,

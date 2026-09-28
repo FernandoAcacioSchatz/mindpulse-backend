@@ -1,28 +1,3 @@
-"""
-Radar Backend — ponto de entrada.
-
-Roda localmente com:
-    uvicorn main:app --reload
-
-Gatilhos, espelhando o que existia no n8n:
-- Rotas HTTP (/executar/*, /encerrar-pesquisa, /notificar-*) chamadas
-  externamente — pela tela do RH, por cron externo (cron-job.org),
-  ou pelo Supabase Database Webhook.
-
-O agendador interno (APScheduler) que existia aqui foi removido —
-o Render gratuito "dorme" sem aviso, e um agendador que depende do
-processo estar de pé no segundo exato não é confiável nesse plano.
-Toda a parte de horário (enviar 8h, lembrete 8h30/11h30, encerrar
-10h) agora é responsabilidade do cron-job.org, configurado
-externamente — ver Documento 30. Rodar os dois ao mesmo tempo já
-causou o backend disparando 3h adiantado (tratando "8h" como UTC
-em vez de horário de Brasília) — não reintroduzir sem entender essa
-causa primeiro.
-
-Dois esquemas de segurança (ver clients/auth.py):
-- JWT do Supabase → endpoints chamados por RH logado
-- Chave de sistema → endpoints chamados por automação/webhook
-"""
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -32,13 +7,10 @@ from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_au
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead, supabase_proxy
 from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
 
-# Origens autorizadas a chamar o backend diretamente do navegador.
-# Sem isso, o navegador bloqueia a chamada mesmo com JWT correto
-# (é proteção do próprio navegador, não do backend).
 ORIGENS_PERMITIDAS = [
-    "https://mindpulse-app.vercel.app",   # app em produção (nome original)
-    "https://radar-empresa.vercel.app",   # app em produção (confirmado no navegador)
-    "http://127.0.0.1:5500",              # Live Server, teste local
+    "https://mindpulse-app.vercel.app",
+    "https://radar-empresa.vercel.app",
+    "http://127.0.0.1:5500",
     "http://localhost:5500",
 ]
 
@@ -48,9 +20,9 @@ app = FastAPI(title="Radar Backend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGENS_PERMITIDAS,
-    allow_credentials=True,  # obrigatório pro cookie httpOnly viajar entre domínios (Vercel <-> Render)
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "PUT"],
-    allow_headers=["*"],  # aceita qualquer cabeçalho pedido -- evita ficar descobrindo nome por nome
+    allow_headers=["*"],
 )
 
 app.include_router(supabase_proxy.router)
@@ -71,10 +43,6 @@ def status():
     return {"status": "ok", "servico": "Radar Backend"}
 
 
-# ================================================================
-# Endpoints de sistema — protegidos por chave fixa (X-API-Key)
-# ================================================================
-
 @app.post("/executar/lembrete-diario", dependencies=[Depends(verificar_chave_sistema)])
 def executar_lembrete_manual():
     return lembrete_diario.rodar()
@@ -92,11 +60,6 @@ def executar_enviar_pesquisa_manual():
 
 @app.post("/executar/encerrar-automatico", dependencies=[Depends(verificar_chave_sistema)])
 def executar_encerrar_automatico_manual(background_tasks: BackgroundTasks):
-    # Chama o Gemini + PLN, pode levar bem mais que 30s com várias
-    # pesquisas de uma vez -- alguns serviços de cron gratuito têm
-    # tempo limite curto e não configurável (ex: cron-job.org, 30s
-    # fixo). Responde rápido aqui, processa de verdade depois, em
-    # segundo plano -- o cron não fica esperando o trabalho pesado.
     background_tasks.add_task(encerrar_automatico.rodar)
     return {"status": "processamento iniciado em segundo plano"}
 
@@ -111,18 +74,7 @@ def rota_notificar_lead(payload: NotificarLeadPayload):
     return notificar_lead.processar(payload.model_dump(mode="json"))
 
 
-# ================================================================
-# Endpoint chamado pelo RH logado — protegido por JWT do Supabase
-# ================================================================
-
 def _buscar_um(query):
-    """
-    Roda uma query .maybe_single() com segurança. Em algumas versões
-    do supabase-py, .execute() devolve None direto quando não acha
-    nenhuma linha, em vez de um objeto de resposta com .data=None —
-    acessar .data nesse caso quebra com AttributeError. Essa função
-    trata os dois comportamentos.
-    """
     resposta = query.execute()
     return resposta.data if resposta else None
 
@@ -159,10 +111,6 @@ def rota_enviar_pesquisa_agora(pesquisa_id: str, auth: dict = Depends(verificar_
     return enviar_pesquisa.processar_uma_pesquisa(pesquisa)
 
 
-# ================================================================
-# Rota de administração — só você, nunca RH de cliente
-# ================================================================
-
 @app.post("/admin/provisionar-empresa")
 def rota_provisionar_empresa(payload: ProvisionarEmpresaPayload, _admin: dict = Depends(verificar_admin)):
     return admin.provisionar_empresa(
@@ -175,43 +123,30 @@ def rota_provisionar_empresa(payload: ProvisionarEmpresaPayload, _admin: dict = 
 
 @app.get("/admin/verificar")
 def rota_verificar_admin(_admin: dict = Depends(verificar_admin)):
-    """Só confirma se quem está logado é da equipe Radar — usado pela
-    tela admin.html antes de mostrar o formulário de cadastro."""
     return {"autorizado": True}
 
 
 @app.get("/admin/leads")
 def rota_listar_leads(_admin: dict = Depends(verificar_admin)):
-    """Mensagens recebidas pelo formulário de contato do site comercial.
-    Passa pelo backend (service_role) porque a tabela 'lead' não tem
-    política de leitura — só de escrita, de propósito (formulário
-    público não deveria conseguir LER contato de outra pessoa)."""
     leads = supabase.table("lead").select("*").order("criado_em", desc=True).execute().data
     return {"leads": leads}
 
 
 @app.patch("/admin/leads/{lead_id}")
 def rota_atualizar_status_lead(lead_id: str, payload: AtualizarStatusLeadPayload, _admin: dict = Depends(verificar_admin)):
-    """Marca (ou desmarca) um lead como visto ou respondido -- sempre
-    grava quem fez isso e quando, usando o e-mail de quem está logado."""
     return admin.atualizar_status_lead(lead_id, payload.campo, payload.marcar, _admin["email"])
 
 
 @app.put("/admin/leads/{lead_id}/observacoes")
 def rota_salvar_observacao_lead(lead_id: str, payload: SalvarObservacaoLeadPayload, _admin: dict = Depends(verificar_admin)):
-    """Anotação livre sobre o lead."""
     return admin.salvar_observacao_lead(lead_id, payload.observacoes)
 
 
 @app.get("/admin/empresas")
 def rota_listar_empresas(_admin: dict = Depends(verificar_admin)):
-    """Visão operacional de todas as empresas -- funcionários, ciclos,
-    status do ciclo mais recente. Nunca devolve score/indicador."""
     return {"empresas": admin.listar_empresas()}
 
 
 @app.get("/admin/empresas/{empresa_id}")
 def rota_detalhar_empresa(empresa_id: str, _admin: dict = Depends(verificar_admin)):
-    """Linha do tempo de ciclos de 1 empresa -- status e taxa de
-    resposta de cada um. Nunca devolve score/indicador."""
     return admin.detalhar_empresa(empresa_id)

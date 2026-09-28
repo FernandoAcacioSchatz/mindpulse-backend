@@ -23,8 +23,6 @@ def rodar() -> dict:
     enviados = 0
 
     for token in tokens:
-        # Pesquisa já encerrada (por qualquer motivo) -- não faz
-        # sentido lembrar de responder algo que já foi analisado.
         if not token.get("pesquisa") or token["pesquisa"]["status"] != "enviada":
             continue
 
