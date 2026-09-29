@@ -23,11 +23,14 @@ Dois esquemas de segurança (ver clients/auth.py):
 - JWT do Supabase → endpoints chamados por RH logado
 - Chave de sistema → endpoints chamados por automação/webhook
 """
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from datetime import datetime, timezone
+
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
+from config import BREVO_WEBHOOK_SECRET
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead, supabase_proxy
 from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
@@ -168,8 +171,13 @@ def rota_encerrar_pesquisa(
     return {"status": "processamento iniciado em segundo plano"}
 
 
-@app.post("/pesquisa/{pesquisa_id}/enviar")
+@app.post("/pesquisa/{pesquisa_id}/enviar", status_code=202)
 def rota_enviar_pesquisa_agora(pesquisa_id: str, auth: dict = Depends(verificar_jwt_supabase)):
+    # 202 Accepted (Etapa 2.a/2.c do trabalho de mensageria): o corpo da
+    # resposta já sai com o lote_id assim que as mensagens são publicadas
+    # na fila -- ninguém espera nenhum e-mail terminar de ser enviado pra
+    # receber essa resposta. O RH consulta o progresso depois em
+    # GET /pesquisa/lote/{lote_id}/status.
     pesquisa = _buscar_um(
         supabase.table("pesquisa").select("id, nome, ciclo_id, prazo_horas, status").eq("id", pesquisa_id).maybe_single()
     )
@@ -185,6 +193,86 @@ def rota_enviar_pesquisa_agora(pesquisa_id: str, auth: dict = Depends(verificar_
     verificar_rh_pertence_a_empresa(auth["sub"], ciclo["empresa_id"])
 
     return enviar_pesquisa.processar_uma_pesquisa(pesquisa)
+
+
+@app.get("/pesquisa/lote/{lote_id}/status")
+def rota_status_lote(lote_id: str, auth: dict = Depends(verificar_jwt_supabase)):
+    """
+    Consulta de progresso do lote (Etapa 2.c): o frontend chama isso
+    periodicamente (a cada ~2s) depois do 202, até `concluido` virar
+    true, em vez de ficar esperando uma única requisição travada.
+    """
+    itens = (
+        supabase.table("envio_lote_item")
+        .select("status, pesquisa_id")
+        .eq("lote_id", lote_id)
+        .execute()
+        .data
+    )
+    if not itens:
+        raise HTTPException(404, "Lote não encontrado.")
+
+    pesquisa_id = itens[0]["pesquisa_id"]
+    pesquisa = _buscar_um(supabase.table("pesquisa").select("ciclo_id").eq("id", pesquisa_id).maybe_single())
+    if not pesquisa:
+        raise HTTPException(404, "Pesquisa do lote não encontrada.")
+    ciclo = _buscar_um(supabase.table("ciclo").select("empresa_id").eq("id", pesquisa["ciclo_id"]).maybe_single())
+    if not ciclo:
+        raise HTTPException(404, "Ciclo não encontrado.")
+    verificar_rh_pertence_a_empresa(auth["sub"], ciclo["empresa_id"])
+
+    contagem = {"pendente": 0, "enviado": 0, "falhou": 0, "entregue": 0, "devolvido": 0}
+    for item in itens:
+        contagem[item["status"]] = contagem.get(item["status"], 0) + 1
+
+    return {
+        "lote_id": lote_id,
+        "total": len(itens),
+        "contagem": contagem,
+        # "concluido" olha só pra fila de envio (pendente == 0) -- não
+        # espera confirmação de entrega/bounce do webhook, que pode
+        # demorar minutos e não deveria travar a barra de progresso.
+        "concluido": contagem["pendente"] == 0,
+    }
+
+
+@app.post("/webhooks/brevo/{chave}")
+async def rota_webhook_brevo(chave: str, request: Request):
+    """
+    Confirmação de entrega ao destinatário (Etapa 2.c, item 3) -- a
+    Brevo chama isso minutos depois do envio, informando se entregou ou
+    se voltou (bounce). Correlaciona com a linha certa pela tag que
+    mandamos junto no envio (ver clients/brevo_client.py e
+    workers/consumidor_convites.py) -- é o envio_lote_item.id.
+
+    Sem JWT nem X-API-Key (a Brevo não manda nenhum dos dois) -- a
+    própria URL, com essa chave, é a proteção. Configurar a mesma
+    string em BREVO_WEBHOOK_SECRET e no cadastro do webhook no painel
+    da Brevo.
+    """
+    if not BREVO_WEBHOOK_SECRET or chave != BREVO_WEBHOOK_SECRET:
+        raise HTTPException(401, "Chave de webhook inválida.")
+
+    payload = await request.json()
+    evento = payload.get("event")
+    tags = payload.get("tags") or []
+    if not tags:
+        return {"status": "ignorado", "motivo": "sem tag de correlação"}
+
+    envio_item_id = tags[0]
+
+    if evento == "delivered":
+        novo_status = "entregue"
+    elif evento in ("hard_bounce", "soft_bounce", "blocked", "invalid_email"):
+        novo_status = "devolvido"
+    else:
+        return {"status": "ignorado", "motivo": f"evento '{evento}' não tratado"}
+
+    supabase.table("envio_lote_item").update(
+        {"status": novo_status, "atualizado_em": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", envio_item_id).execute()
+
+    return {"status": "ok"}
 
 
 # ================================================================

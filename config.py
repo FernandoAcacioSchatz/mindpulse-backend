@@ -24,6 +24,12 @@ RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "")
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
 BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", "contato@mindpulse.app")
 
+# Segredo simples no caminho da URL do webhook (/webhooks/brevo/{chave}) --
+# a Brevo não assina os webhooks, então isso evita que alguém de fora
+# descubra a URL e mande eventos falsos de entrega/bounce. Configurar a
+# MESMA string ao cadastrar o webhook no painel da Brevo.
+BREVO_WEBHOOK_SECRET = os.environ.get("BREVO_WEBHOOK_SECRET", "")
+
 BASE_URL_FRONTEND = os.environ.get("BASE_URL_FRONTEND", "https://mindpulse-app.vercel.app")
 
 # Lista de e-mails autorizados a chamar as rotas de /admin — a
