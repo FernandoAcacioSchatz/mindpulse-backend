@@ -31,6 +31,7 @@ from clients.supabase_client import supabase
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead, supabase_proxy
 from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
+from workers import consumidor_convites
 
 # Origens autorizadas a chamar o backend diretamente do navegador.
 # Sem isso, o navegador bloqueia a chamada mesmo com JWT correto
@@ -99,6 +100,19 @@ def executar_encerrar_automatico_manual(background_tasks: BackgroundTasks):
     # segundo plano -- o cron não fica esperando o trabalho pesado.
     background_tasks.add_task(encerrar_automatico.rodar)
     return {"status": "processamento iniciado em segundo plano"}
+
+
+@app.post("/executar/processar-fila-convites", dependencies=[Depends(verificar_chave_sistema)])
+def executar_processar_fila_convites():
+    # Consumidor da fila do RabbitMQ (ver workers/consumidor_convites.py).
+    # Drena um lote e responde -- pensado pra ser chamado por um cron
+    # externo a cada poucos minutos (mesmo esquema do cron-job.org que
+    # já mantém o backend acordado), não pra ficar escutando pra sempre
+    # (Render free não tem processo persistente de graça). Roda direto
+    # aqui, sem BackgroundTasks: um lote de 50 mensagens é rápido, e
+    # devolver o resultado (quantas enviadas/reencaminhadas/mortas) é
+    # útil pra acompanhar no painel do cron-job.org.
+    return consumidor_convites.processar_lote()
 
 
 @app.post("/notificar-alerta-critico", dependencies=[Depends(verificar_chave_sistema)])

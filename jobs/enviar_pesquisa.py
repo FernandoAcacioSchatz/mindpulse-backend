@@ -1,11 +1,32 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
+"""
+Equivalente ao workflow n8n 'Enviar Pesquisa (v2 corrigido)' —
+migração completa.
+
+Melhoria em relação à versão n8n: processa TODAS as pesquisas
+agendadas numa execução, não só 1 (era uma limitação conhecida
+do node "limit: 1", documentada no Documento 10).
+
+Idempotente: se rodar 2x por engano, não duplica token nem manda
+e-mail 2x — verifica se o token já existe antes de criar.
+
+Envio de e-mail via RabbitMQ (CloudAMQP), não mais direto por aqui:
+criar token é rápido (banco), mas mandar e-mail é uma chamada de
+rede -- pra uma empresa grande, esperar todo mundo enviar antes de
+responder a requisição tem o mesmo risco que já vimos em
+/encerrar-pesquisa (timeout do proxy na frente do Render). Agora
+esse job só cria os tokens e PUBLICA 1 mensagem por convite na fila
+-- quem manda o e-mail de verdade é o worker separado
+(workers/consumidor_convites.py). Ver clients/rabbitmq_client.py
+pra topologia (exchange, filas, retry, DLQ).
+
+IMPORTANTE: no plano gratuito da Brevo existe um teto de 300
+e-mails/dia -- isso não é resolvido por código nenhum, é limite
+de conta. Cliente grande = upgrade de plano na Brevo, não mais fila.
+"""
 from datetime import datetime, timezone, timedelta
 
 from clients.supabase_client import supabase
-from clients.brevo_client import enviar_email
-from config import BASE_URL_FRONTEND
-
-MAX_ENVIOS_SIMULTANEOS = 15
+from clients.rabbitmq_client import publicar_convites
 
 
 def rodar() -> dict:
@@ -17,13 +38,12 @@ def rodar() -> dict:
         .data
     )
 
-    resultado_geral = {"pesquisas_processadas": 0, "emails_enviados": 0, "emails_com_erro": 0, "detalhes": []}
+    resultado_geral = {"pesquisas_processadas": 0, "convites_enfileirados": 0, "detalhes": []}
 
     for pesquisa in pesquisas:
         detalhe = processar_uma_pesquisa(pesquisa)
         resultado_geral["pesquisas_processadas"] += 1
-        resultado_geral["emails_enviados"] += detalhe["emails_enviados"]
-        resultado_geral["emails_com_erro"] += detalhe["emails_com_erro"]
+        resultado_geral["convites_enfileirados"] += detalhe["convites_enfileirados"]
         resultado_geral["detalhes"].append(detalhe)
 
     print(f"[enviar_pesquisa] {resultado_geral}")
@@ -51,6 +71,7 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
 
     expira_em = (datetime.now(timezone.utc) + timedelta(hours=prazo_horas)).isoformat()
 
+    # ---- Passo 1: cria todos os tokens primeiro (rápido, só banco, sequencial está ok) ----
     fila_de_envio = []
     for funcionario in funcionarios:
         resposta_existente = (
@@ -63,7 +84,7 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         )
         existente = resposta_existente.data if resposta_existente else None
         if existente:
-            continue
+            continue  # já processado numa execução anterior — idempotência
 
         resposta_token = (
             supabase.table("token_resposta")
@@ -76,36 +97,28 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         token = resposta_token.data[0]
         fila_de_envio.append((funcionario, token))
 
-    emails_enviados = 0
-    emails_com_erro = 0
+    # ---- Passo 2: publica 1 mensagem por convite no RabbitMQ ----
+    # (quem manda o e-mail de verdade é workers/consumidor_convites.py,
+    # chamado separadamente -- ver Documento de arquitetura de mensageria)
+    mensagens = [
+        {
+            "pesquisa_id": pesquisa_id,
+            "ciclo_id": pesquisa["ciclo_id"],
+            "funcionario_id": funcionario["id"],
+            "funcionario_nome": funcionario["nome"],
+            "funcionario_email": funcionario["email"],
+            "token_codigo": token["codigo"],
+            "prazo_horas": prazo_horas,
+            "tentativas": 0,
+        }
+        for funcionario, token in fila_de_envio
+    ]
+    publicar_convites(mensagens)
 
-    def _enviar_um(item):
-        funcionario, token = item
-        link = f"{BASE_URL_FRONTEND}/pulse/{token['codigo']}"
-        enviar_email(
-            destinatario_email=funcionario["email"],
-            destinatario_nome=funcionario["nome"],
-            assunto="Pesquisa de Clima e Bem-estar — sua participação é importante",
-            corpo_html=f"""
-                <p>Olá, {funcionario['nome']}!</p>
-                <p>Você foi convidado a participar de uma pesquisa rápida e anônima sobre o
-                ambiente de trabalho. Leva menos de 5 minutos.</p>
-                <p><a href="{link}">Responder pesquisa</a></p>
-                <p>Este link é pessoal e expira em {prazo_horas} horas.</p>
-            """,
-        )
-
-    with ThreadPoolExecutor(max_workers=MAX_ENVIOS_SIMULTANEOS) as executor:
-        futuros = {executor.submit(_enviar_um, item): item for item in fila_de_envio}
-        for futuro in as_completed(futuros):
-            funcionario, _ = futuros[futuro]
-            try:
-                futuro.result()
-                emails_enviados += 1
-            except Exception as e:
-                emails_com_erro += 1
-                print(f"[enviar_pesquisa] Erro ao enviar para {funcionario['email']}: {e}")
-
+    # "enviada" agora significa "despachada pra fila", não "todo mundo já
+    # recebeu o e-mail" -- é o momento certo pra começar a contar o prazo
+    # de resposta de qualquer forma (o prazo é sobre a pesquisa, não sobre
+    # quando cada e-mail individual saiu da fila).
     supabase.table("pesquisa").update(
         {"status": "enviada", "enviada_em": datetime.now(timezone.utc).isoformat()}
     ).eq("id", pesquisa_id).execute()
@@ -114,6 +127,5 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         "pesquisa_id": pesquisa_id,
         "nome": pesquisa["nome"],
         "funcionarios_totais": len(funcionarios),
-        "emails_enviados": emails_enviados,
-        "emails_com_erro": emails_com_erro,
+        "convites_enfileirados": len(mensagens),
     }

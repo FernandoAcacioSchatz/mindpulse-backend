@@ -9,3 +9,4 @@ joblib
 pandas
 numpy
 pyjwt[crypto]
+pika
