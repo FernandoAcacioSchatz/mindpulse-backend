@@ -172,10 +172,12 @@ def rota_encerrar_pesquisa(
 
 
 @app.post("/pesquisa/{pesquisa_id}/enviar", status_code=202)
-def rota_enviar_pesquisa_agora(pesquisa_id: str, auth: dict = Depends(verificar_jwt_supabase)):
-    # 202 Accepted (Etapa 2.a/2.c do trabalho de mensageria): o corpo da
-    # resposta já sai com o lote_id assim que as mensagens são publicadas
-    # na fila -- ninguém espera nenhum e-mail terminar de ser enviado pra
+def rota_enviar_pesquisa_agora(pesquisa_id: str, background_tasks: BackgroundTasks, auth: dict = Depends(verificar_jwt_supabase)):
+    # 202 Accepted de verdade (Etapa 2.a/2.c): o Passo 1 (criar token +
+    # item, agora em lote -- ver preparar_lote) roda aqui na hora, rápido
+    # o bastante pra não travar a resposta; o Passo 2 (publicar no
+    # RabbitMQ, que pode demorar se precisar reconectar/retentar) vai pro
+    # BackgroundTasks. Ninguém espera nenhum e-mail ser processado pra
     # receber essa resposta. O RH consulta o progresso depois em
     # GET /pesquisa/lote/{lote_id}/status.
     pesquisa = _buscar_um(
@@ -183,8 +185,8 @@ def rota_enviar_pesquisa_agora(pesquisa_id: str, auth: dict = Depends(verificar_
     )
     if not pesquisa:
         raise HTTPException(404, "Pesquisa não encontrada.")
-    if pesquisa["status"] != "agendada":
-        raise HTTPException(400, "Essa pesquisa já foi enviada ou não está mais agendada.")
+    if pesquisa["status"] == "encerrada":
+        raise HTTPException(400, "Essa pesquisa já foi encerrada.")
 
     ciclo = _buscar_um(supabase.table("ciclo").select("empresa_id").eq("id", pesquisa["ciclo_id"]).maybe_single())
     if not ciclo:
@@ -192,7 +194,26 @@ def rota_enviar_pesquisa_agora(pesquisa_id: str, auth: dict = Depends(verificar_
 
     verificar_rh_pertence_a_empresa(auth["sub"], ciclo["empresa_id"])
 
-    return enviar_pesquisa.processar_uma_pesquisa(pesquisa)
+    # preparar_lote olha só "esse funcionário já tem token?", nunca o
+    # status da pesquisa -- por isso funciona igual numa "agendada" com
+    # gente pra trás ou numa "enviada" que ficou incompleta (não existe
+    # mais bloqueio por status aqui, só pra "encerrada" acima).
+    preparo = enviar_pesquisa.preparar_lote(pesquisa)
+    if not preparo["fila_de_envio"]:
+        return {
+            "pesquisa_id": pesquisa_id,
+            "lote_id": None,
+            "funcionarios_totais": preparo["funcionarios_totais"],
+            "convites_enfileirados": 0,
+        }
+
+    background_tasks.add_task(enviar_pesquisa.publicar_e_finalizar, preparo)
+    return {
+        "pesquisa_id": pesquisa_id,
+        "lote_id": preparo["lote_id"],
+        "funcionarios_totais": preparo["funcionarios_totais"],
+        "convites_enfileirados": preparo["convites_enfileirados"],
+    }
 
 
 @app.get("/pesquisa/lote/{lote_id}/status")

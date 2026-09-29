@@ -36,10 +36,16 @@ from clients.rabbitmq_client import publicar_convites
 
 
 def rodar() -> dict:
+    # Pega "agendada" (nunca enviada) e "enviada" (já despachada, mas
+    # pode ter gente sem token ainda -- funcionário novo, ou convite que
+    # falhou numa execução anterior) -- preparar_lote não usa o status
+    # pra decidir quem falta, só se aquele funcionário já tem token, e
+    # devolve fila vazia sozinho quando não sobrou ninguém, então incluir
+    # "enviada" aqui não duplica nem reprocessa quem já foi.
     pesquisas = (
         supabase.table("pesquisa")
-        .select("id, nome, ciclo_id, prazo_horas")
-        .eq("status", "agendada")
+        .select("id, nome, ciclo_id, prazo_horas, status")
+        .in_("status", ["agendada", "enviada"])
         .execute()
         .data
     )
@@ -56,10 +62,23 @@ def rodar() -> dict:
     return resultado_geral
 
 
-def processar_uma_pesquisa(pesquisa: dict) -> dict:
+def preparar_lote(pesquisa: dict) -> dict:
+    """
+    Passo 1 -- cria token + item de status do lote pra quem ainda não
+    tem (idempotência olha só "esse funcionário já tem token pra essa
+    pesquisa?", nunca o status da pesquisa -- por isso funciona tanto
+    pra reenviar uma "agendada" incompleta quanto pra fechar a lacuna
+    de uma "enviada" que ficou com gente pra trás).
+
+    Em lote (1 SELECT pra achar quem já tem token + até 2 INSERTs em
+    lote pros que faltam), em vez de 1 SELECT + até 2 INSERTs POR
+    FUNCIONÁRIO como antes -- pra 100 funcionários isso trocava até
+    ~300 idas ao Supabase em série por só 4, que é o que permite essa
+    etapa ficar rápida o bastante pra rodar de forma síncrona, antes
+    do 202.
+    """
     pesquisa_id = pesquisa["id"]
     prazo_horas = pesquisa.get("prazo_horas") or 24
-    lote_id = str(uuid.uuid4())
 
     resposta_ciclo = supabase.table("ciclo").select("empresa_id").eq("id", pesquisa["ciclo_id"]).single().execute()
     ciclo = resposta_ciclo.data if resposta_ciclo else None
@@ -76,59 +95,64 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         .data
     )
 
+    tokens_existentes = (
+        supabase.table("token_resposta")
+        .select("funcionario_id")
+        .eq("pesquisa_id", pesquisa_id)
+        .execute()
+        .data
+    )
+    ids_com_token = {t["funcionario_id"] for t in tokens_existentes}
+    pendentes = [f for f in funcionarios if f["id"] not in ids_com_token]
+
+    resultado_base = {
+        "pesquisa": pesquisa,
+        "pesquisa_id": pesquisa_id,
+        "funcionarios_totais": len(funcionarios),
+        "convites_enfileirados": 0,
+        "lote_id": None,
+        "mensagens": [],
+        "fila_de_envio": [],
+    }
+    if not pendentes:
+        return resultado_base
+
+    lote_id = str(uuid.uuid4())
     expira_em = (datetime.now(timezone.utc) + timedelta(hours=prazo_horas)).isoformat()
 
-    # ---- Passo 1: cria token + item de status do lote (rápido, só banco) ----
-    fila_de_envio = []
-    for funcionario in funcionarios:
-        resposta_existente = (
-            supabase.table("token_resposta")
-            .select("id")
-            .eq("pesquisa_id", pesquisa_id)
-            .eq("funcionario_id", funcionario["id"])
-            .maybe_single()
-            .execute()
-        )
-        existente = resposta_existente.data if resposta_existente else None
-        if existente:
-            continue  # já processado numa execução anterior — idempotência
+    tokens_novos = (
+        supabase.table("token_resposta")
+        .insert([{"pesquisa_id": pesquisa_id, "funcionario_id": f["id"], "expira_em": expira_em} for f in pendentes])
+        .execute()
+        .data
+    )
+    token_por_funcionario = {t["funcionario_id"]: t for t in tokens_novos}
 
-        resposta_token = (
-            supabase.table("token_resposta")
-            .insert({"pesquisa_id": pesquisa_id, "funcionario_id": funcionario["id"], "expira_em": expira_em})
-            .execute()
-        )
-        if not resposta_token or not resposta_token.data:
-            print(f"[enviar_pesquisa] Falha ao criar token pra funcionário {funcionario['id']}, pulando.")
-            continue
-        token = resposta_token.data[0]
-
-        # Item de status do lote (Etapa 2.c) -- criado ANTES de publicar,
-        # já com status "pendente". Se a publicação falhar de vez, esse
-        # registro é desfeito junto com o token (ver Passo 3) -- os dois
-        # andam sempre juntos, nunca um sem o outro.
-        resposta_item = (
+    try:
+        itens_novos = (
             supabase.table("envio_lote_item")
-            .insert({
-                "lote_id": lote_id,
-                "pesquisa_id": pesquisa_id,
-                "token_id": token["id"],
-                "funcionario_id": funcionario["id"],
-                "status": "pendente",
-            })
+            .insert([
+                {
+                    "lote_id": lote_id,
+                    "pesquisa_id": pesquisa_id,
+                    "token_id": token_por_funcionario[f["id"]]["id"],
+                    "funcionario_id": f["id"],
+                    "status": "pendente",
+                }
+                for f in pendentes
+            ])
             .execute()
+            .data
         )
-        if not resposta_item or not resposta_item.data:
-            print(f"[enviar_pesquisa] Falha ao criar item de status pra funcionário {funcionario['id']}, desfazendo token e pulando.")
-            supabase.table("token_resposta").delete().eq("id", token["id"]).execute()
-            continue
-        envio_item = resposta_item.data[0]
+    except Exception:
+        # Os itens de status não foram criados -- desfaz os tokens do
+        # lote inteiro (mesmo raciocínio de antes: token e item andam
+        # sempre juntos, nunca um sem o outro).
+        supabase.table("token_resposta").delete().in_("id", [t["id"] for t in tokens_novos]).execute()
+        raise
+    item_por_funcionario = {i["funcionario_id"]: i for i in itens_novos}
 
-        fila_de_envio.append((funcionario, token, envio_item))
-
-    # ---- Passo 2: publica 1 mensagem por convite no RabbitMQ ----
-    # (quem manda o e-mail de verdade é workers/consumidor_convites.py,
-    # chamado separadamente -- ver Documento de arquitetura de mensageria)
+    fila_de_envio = [(f, token_por_funcionario[f["id"]], item_por_funcionario[f["id"]]) for f in pendentes]
     mensagens = [
         {
             "lote_id": lote_id,
@@ -144,50 +168,75 @@ def processar_uma_pesquisa(pesquisa: dict) -> dict:
         }
         for funcionario, token, envio_item in fila_de_envio
     ]
-    resultados = publicar_convites(mensagens)
 
-    # publicar_convites já tenta cada mensagem várias vezes sozinho, mas se
-    # mesmo assim alguma não entrar na fila, não podemos deixar o token e o
-    # item de status "órfãos" -- foram criados no Passo 1, e se ficarem aí
-    # sem convite nenhum na fila, a próxima tentativa de envio vai achar
-    # que esse funcionário já foi tratado (checagem de idempotência lá em
-    # cima) e vai pular ele pra sempre. Desfazendo os dois, a próxima
-    # execução trata esse funcionário como se nunca tivesse sido
-    # processado, e tenta de novo -- criar token + item + publicar
-    # continuam andando juntos, nunca um sem o outro.
-    convites_enfileirados = 0
+    resultado_base.update({
+        "convites_enfileirados": len(fila_de_envio),
+        "lote_id": lote_id,
+        "mensagens": mensagens,
+        "fila_de_envio": fila_de_envio,
+    })
+    return resultado_base
+
+
+def publicar_e_finalizar(preparo: dict) -> dict:
+    """
+    Passo 2 -- publica no RabbitMQ e resolve falha por falha (rollback
+    de token+item de quem não entrou na fila, pra não ficar órfão).
+    Chamada tanto de forma síncrona (pelo cron, em processar_uma_pesquisa)
+    quanto em BackgroundTasks (pela rota manual) -- é a mesma função,
+    só muda quem chama e quando.
+    """
+    pesquisa_id = preparo["pesquisa_id"]
+    fila_de_envio = preparo["fila_de_envio"]
+    if not fila_de_envio:
+        return {**preparo, "falhas_ao_enfileirar": []}
+
+    resultados = publicar_convites(preparo["mensagens"])
+
     falhas = []
     for (funcionario, token, envio_item), sucesso in zip(fila_de_envio, resultados):
-        if sucesso:
-            convites_enfileirados += 1
-        else:
+        if not sucesso:
             supabase.table("envio_lote_item").delete().eq("id", envio_item["id"]).execute()
             supabase.table("token_resposta").delete().eq("id", token["id"]).execute()
             falhas.append(funcionario["email"])
             print(f"[enviar_pesquisa] Convite pra {funcionario['email']} falhou após retentativas -- token e item de status desfeitos, será tentado de novo na próxima execução.")
 
-    # "enviada" agora significa "todo mundo foi despachado pra fila", não
-    # "todo mundo já recebeu o e-mail" -- é o momento certo pra começar a
-    # contar o prazo de resposta (o prazo é sobre a pesquisa, não sobre
-    # quando cada e-mail individual saiu da fila). Só marca assim quando
-    # TODO MUNDO foi enfileirado com sucesso -- se sobrou alguém, a
-    # pesquisa continua "agendada" de propósito, pra poder ser reenviada
-    # (reenviar é seguro: quem já foi enfileirado tem token e é pulado,
-    # só quem falhou é tentado de novo).
-    if not falhas:
+    # "enviada" significa "essa pesquisa já teve pelo menos um lote
+    # despachado com sucesso" -- nunca regride pra "agendada" numa
+    # reexecução (reenviar depois de já ter enviado não deve resetar o
+    # prazo de resposta). Só sobe de "agendada" pra "enviada" quando o
+    # lote atual fechou sem nenhuma falha.
+    sucesso_total = not falhas
+    if sucesso_total and preparo["pesquisa"].get("status") != "enviada":
         supabase.table("pesquisa").update(
             {"status": "enviada", "enviada_em": datetime.now(timezone.utc).isoformat()}
         ).eq("id", pesquisa_id).execute()
-    else:
-        print(f"[enviar_pesquisa] Pesquisa {pesquisa_id} mantida como 'agendada' -- {len(falhas)} convite(s) falharam e podem ser reenviados depois.")
+    elif falhas:
+        print(f"[enviar_pesquisa] Pesquisa {pesquisa_id}, lote {preparo['lote_id']} -- {len(falhas)} convite(s) falharam e podem ser reenviados depois.")
 
+    return {**preparo, "convites_enfileirados": len(fila_de_envio) - len(falhas), "falhas_ao_enfileirar": falhas}
+
+
+def processar_uma_pesquisa(pesquisa: dict) -> dict:
+    """Usada pelo cron (rodar(), abaixo) -- síncrona de ponta a ponta,
+    sem problema porque ninguém fica esperando resposta HTTP dela."""
+    preparo = preparar_lote(pesquisa)
+    if not preparo["fila_de_envio"]:
+        return {
+            "pesquisa_id": preparo["pesquisa_id"],
+            "nome": pesquisa["nome"],
+            "lote_id": None,
+            "funcionarios_totais": preparo["funcionarios_totais"],
+            "convites_enfileirados": 0,
+        }
+    final = publicar_e_finalizar(preparo)
     resultado = {
-        "pesquisa_id": pesquisa_id,
+        "pesquisa_id": final["pesquisa_id"],
         "nome": pesquisa["nome"],
-        "lote_id": lote_id,
-        "funcionarios_totais": len(funcionarios),
-        "convites_enfileirados": convites_enfileirados,
+        "lote_id": final["lote_id"],
+        "funcionarios_totais": final["funcionarios_totais"],
+        "convites_enfileirados": final["convites_enfileirados"],
     }
-    if falhas:
-        resultado["falhas_ao_enfileirar"] = falhas
+    if final["falhas_ao_enfileirar"]:
+        resultado["falhas_ao_enfileirar"] = final["falhas_ao_enfileirar"]
     return resultado
