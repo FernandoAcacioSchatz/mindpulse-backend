@@ -196,7 +196,31 @@ def publicar_e_finalizar(preparo: dict) -> dict:
     falhas = []
     for (funcionario, token, envio_item), sucesso in zip(fila_de_envio, resultados):
         if not sucesso:
-            supabase.table("envio_lote_item").delete().eq("id", envio_item["id"]).execute()
+            # A confirmação de publicação pode reportar falha por engano
+            # (rede lenta, disputa de recursos no Render, etc.) mesmo
+            # quando a mensagem já chegou na fila e foi processada de
+            # verdade pelo consumidor -- visto na prática em teste real
+            # (log de 29/09: 100 "falhas" reportadas aqui, mas o
+            # consumidor já tinha processado praticamente todas).
+            #
+            # Por isso só desfaz o convite se ele ainda estiver
+            # "pendente" NESSE EXATO INSTANTE -- e essa checagem vai
+            # dentro do próprio DELETE (condição no WHERE), não como um
+            # SELECT separado antes, pra não abrir brecha pro consumidor
+            # processar o item bem no meio do caminho entre "conferir" e
+            # "apagar".
+            item_apagado = (
+                supabase.table("envio_lote_item")
+                .delete()
+                .eq("id", envio_item["id"])
+                .eq("status", "pendente")
+                .execute()
+                .data
+            )
+            if not item_apagado:
+                print(f"[enviar_pesquisa] Convite pra {funcionario['email']} -- publicação reportou falha, mas o consumidor já tinha processado antes. Nada foi desfeito.")
+                continue
+
             supabase.table("token_resposta").delete().eq("id", token["id"]).execute()
             falhas.append(funcionario["email"])
             print(f"[enviar_pesquisa] Convite pra {funcionario['email']} falhou após retentativas -- token e item de status desfeitos, será tentado de novo na próxima execução.")
