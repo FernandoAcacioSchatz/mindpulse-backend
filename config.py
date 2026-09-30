@@ -20,40 +20,48 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 # Connection strings do RabbitMQ (CloudAMQP) -- formato amqps://user:senha@host/vhost.
 # Nunca hardcoded; configurar como variável de ambiente no Render/VM.
 #
-# Autorização por papel (Etapa 3 do trabalho de Sistemas Distribuídos --
-# antes disso, um único usuário com acesso total fazia tudo, produtor e
-# consumidor, sem nenhuma separação de permissão real):
+# Autorização por papel (Etapa 3 do trabalho de Sistemas Distribuídos):
+# o código já está preparado pra 3 credenciais de papel distinto (admin,
+# publicador, consumidor -- ver RABBITMQ_AUTORIZACAO.md pra matriz de
+# permissão completa e a justificativa de cada campo), mas HOJE elas
+# ainda apontam pra UMA ÚNICA credencial real. Motivo, confirmado na
+# documentação oficial: gerenciar usuários/permissões no RabbitMQ só é
+# liberado nos planos "dedicados" da CloudAMQP (Sassy Squirrel pra
+# cima) -- o plano gratuito usado aqui (Little Lemur, compartilhado)
+# não expõe essa função, então não existe hoje como criar
+# radar_publisher/radar_consumidor de verdade sem upgrade pago ou sem
+# trocar de broker. Ver RABBITMQ_AUTORIZACAO.md, seção "Limitação
+# descoberta", pra fonte e para os dois caminhos que resolveriam isso
+# de vez (upgrade de plano, ou self-host num VM próprio).
 #
-# - RABBITMQ_URL              -- credencial ADMIN (a original). Único uso
-#   permitido: scripts/provisionar_topologia.py, rodado manualmente sempre
-#   que a topologia (exchange/filas/bindings) precisa ser criada ou mudar.
-#   NUNCA usada pelos processos que ficam no ar (jobs, workers, rotas).
-# - RABBITMQ_URL_PUBLISHER    -- usuário "radar_publisher": só publica na
-#   exchange radar.eventos (permissão write nela, configure e read vazios).
-#   Usada por clients/rabbitmq_client.py::publicar_mensagens (chamada
-#   pelos jobs que enfileiram convites/lembretes).
-# - RABBITMQ_URL_CONSUMIDOR   -- usuário "radar_consumidor": só lê/consome
-#   das filas fila.* (permissão read nelas) e só publica na exchange
-#   default/nomeless (permissão write == "^$", usada pra mandar mensagem
-#   pra DLQ por nome de fila). Usada pelos dois workers consumidores e
-#   pelo monitor da DLQ (jobs/monitorar_dlq.py).
+# - RABBITMQ_URL              -- a credencial única de hoje. Também é a
+#   única usada por scripts/provisionar_topologia.py.
+# - RABBITMQ_URL_PUBLISHER    -- vazio hoje (não existe usuário
+#   radar_publisher ainda) -- cai automaticamente pra RABBITMQ_URL.
+# - RABBITMQ_URL_CONSUMIDOR   -- vazio hoje (não existe usuário
+#   radar_consumidor ainda) -- cai automaticamente pra RABBITMQ_URL.
 #
-# Ver o runbook entregue junto (RABBITMQ_AUTORIZACAO.md) pros valores
-# exatos de configure/write/read a cadastrar no painel do CloudAMQP.
+# O ganho real de HOJE não é ter 3 segredos diferentes (ainda não tem)
+# -- é que nenhum processo em produção (jobs, workers) declara mais
+# topologia sozinho (não usa mais permissão "configure" em nada); só o
+# script de provisionamento faz isso. Isso já reduz o raio de ação de
+# cada processo, e o dia que os 2 usuários novos existirem (upgrade ou
+# migração de broker), a mudança é só preencher as 2 variáveis abaixo
+# -- nenhum código muda.
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "")
 RABBITMQ_URL_PUBLISHER = os.environ.get("RABBITMQ_URL_PUBLISHER", "")
 RABBITMQ_URL_CONSUMIDOR = os.environ.get("RABBITMQ_URL_CONSUMIDOR", "")
 
 if RABBITMQ_URL and (not RABBITMQ_URL_PUBLISHER or not RABBITMQ_URL_CONSUMIDOR):
-    # Fallback só pra não quebrar um deploy antigo enquanto os usuários
-    # novos não foram criados no CloudAMQP -- ver runbook. Uma vez migrado,
-    # RABBITMQ_URL (admin) não deveria mais aparecer nesse print nunca.
+    # Esperado hoje (ver comentário acima) -- plano gratuito da CloudAMQP
+    # não permite criar radar_publisher/radar_consumidor ainda. Isto NÃO
+    # é um erro de configuração pra corrigir agora; é o estado normal até
+    # uma eventual migração de plano/broker (RABBITMQ_AUTORIZACAO.md).
     print(
-        "[config] AVISO: RABBITMQ_URL_PUBLISHER e/ou RABBITMQ_URL_CONSUMIDOR não "
-        "configuradas -- caindo de volta pra credencial admin (RABBITMQ_URL) por "
-        "enquanto. Isso NÃO tem a separação de autorização da Etapa 3; crie os "
-        "usuários radar_publisher/radar_consumidor no CloudAMQP e configure as "
-        "duas variáveis novas assim que possível."
+        "[config] Aviso esperado: RABBITMQ_URL_PUBLISHER e/ou "
+        "RABBITMQ_URL_CONSUMIDOR não configuradas -- usando a credencial "
+        "única (RABBITMQ_URL) pra tudo, porque o plano gratuito da CloudAMQP "
+        "não permite criar usuários novos (ver RABBITMQ_AUTORIZACAO.md)."
     )
     RABBITMQ_URL_PUBLISHER = RABBITMQ_URL_PUBLISHER or RABBITMQ_URL
     RABBITMQ_URL_CONSUMIDOR = RABBITMQ_URL_CONSUMIDOR or RABBITMQ_URL

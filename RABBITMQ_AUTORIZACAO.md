@@ -1,42 +1,85 @@
-# Autorização real no RabbitMQ, teste de falha (DLQ) e monitoramento
+# Autorização no RabbitMQ, teste de falha (DLQ) e monitoramento
 
 Este documento é o roteiro pra fechar as 3 lacunas da Etapa 3-5 do
-trabalho de Sistemas Distribuídos (mensageria): autorização de verdade
+trabalho de Sistemas Distribuídos (mensageria): autorização
 (separação de papel produtor/consumidor), um exemplo ao vivo do
 caminho de falha (DLQ) e monitoramento/alerta sobre a fila morta.
 
-O código já está pronto (ver lista de arquivos no final). O que falta
-é você fazer, no painel do CloudAMQP: **criar os 2 usuários novos** e
-**trocar as variáveis de ambiente** onde o backend roda. Depois disso,
-os scripts de teste fazem o resto.
+**Atualização importante**: ao tentar criar os usuários novos no
+CloudAMQP, descobrimos que o plano gratuito não permite isso (seção 2
+explica). Os itens 2 (teste de falha) e 3 (monitoramento) não são
+afetados por isso -- seguem funcionando normalmente com a credencial
+única de sempre. Já o item 1 (autorização) teve que ser adaptado: o
+código já está pronto pra separação de papel, mas ela só vira real
+quando/se você criar as credenciais novas (seção 2 explica os
+caminhos). O que sobra pra fazer AGORA está resumido na seção 5.
 
 ---
 
-## 1. O que mudou e por quê
+## 1. O que foi identificado (a lacuna original)
 
 Antes: uma única credencial (usuário/senha do CloudAMQP) com acesso
 total ao vhost -- o mesmo usuário publicava, consumia, criava e
 apagava filas. Não existia separação nenhuma de permissão por papel.
-Isso é exatamente a lacuna de "autorização" que o enunciado pede na
-Etapa 3.
+Essa é a lacuna de "autorização" que o enunciado pede na Etapa 3.
 
-Agora: 3 credenciais, cada uma só com o que precisa (princípio do
-menor privilégio):
+## 2. Limitação descoberta: o plano gratuito não deixa criar usuários
 
-| Credencial | Usado por | Pra quê |
-|---|---|---|
-| **admin** (a original, `RABBITMQ_URL`) | só `scripts/provisionar_topologia.py`, rodado manualmente por você | criar/alterar exchange, filas e bindings |
-| **radar_publisher** (`RABBITMQ_URL_PUBLISHER`) | jobs que enfileiram convite/lembrete (`clients/rabbitmq_client.py::publicar_mensagens`) | só publicar na exchange |
-| **radar_consumidor** (`RABBITMQ_URL_CONSUMIDOR`) | os dois workers consumidores + o monitor da DLQ | só ler das filas e mandar mensagem morta pra DLQ |
+Ao tentar seguir o plano original (criar 2 usuários novos no painel
+"Admin" do RabbitMQ Manager), o botão "Add a user" simplesmente não
+aparece. Não é erro de configuração -- é uma restrição documentada da
+própria CloudAMQP:
 
-A credencial admin **nunca mais** é usada por um processo que fica no
-ar -- só nesse script manual. Isso também muda um detalhe técnico: os
-workers e os jobs **não redeclaram mais a topologia a cada conexão**
-(isso exigia permissão `configure`, que as credenciais novas não têm).
-A topologia passa a ser responsabilidade exclusiva do script de
-provisionamento.
+> "It is only possible to manage users, virtual hosts and permissions
+> on dedicated plans. A dedicated plan is Sassy Squirrel or any plan
+> larger than Sassy Squirrel." -- [CloudAMQP FAQ](https://www.cloudamqp.com/docs/faq.html)
 
-## 2. Matriz de permissões exata
+O plano usado neste projeto é o **Little Lemur** (gratuito,
+compartilhado com outros clientes no mesmo cluster) -- exatamente a
+categoria que a CloudAMQP exclui dessa funcionalidade. Faz sentido do
+ponto de vista deles: dar a um usuário do plano grátis a permissão
+`administrator` do RabbitMQ (necessária pra criar/gerenciar outros
+usuários) daria a ele visibilidade sobre um cluster compartilhado com
+outras contas.
+
+**Dois caminhos existem pra resolver isso de verdade**, se você quiser
+ir além do que este documento cobre hoje:
+
+1. **Upgrade pago** pro plano Sassy Squirrel (a partir de ~US$19/mês)
+   -- libera o Admin de usuários sem sair da CloudAMQP nem migrar nada.
+2. **Self-host o broker** (RabbitMQ via Docker, por exemplo) na sua VM
+   Oracle Cloud Always Free -- a mesma que já roda o
+   `workers/consumidor_continuo.py` via `radar-consumidor.service`.
+   Nela você tem acesso de administrador total, sem custo, mas dá
+   trabalho extra (instalar, abrir porta/firewall na Oracle Cloud,
+   migrar a connection string em todo lugar) que não cabe no prazo de
+   hoje.
+
+Nenhum dos dois é necessário pra entregar o trabalho -- ver seção 3.
+
+## 3. O que já está resolvido, mesmo sem os usuários novos
+
+O código entregue (zip anterior) já foi reorganizado seguindo o
+princípio do menor privilégio, mesmo rodando hoje com uma única
+credencial real:
+
+- **`clients/rabbitmq_client.py`** agora tem 3 funções de conexão
+  (`conectar_admin`, `conectar_publicador`, `conectar_consumidor`) e a
+  criação da topologia (exchange/filas/bindings, que exige permissão
+  `configure`) foi isolada num script separado
+  (`scripts/provisionar_topologia.py`). **Nenhum processo que fica no
+  ar (jobs, workers) usa mais permissão `configure` em nada** -- só
+  usa os recursos que já existem.
+- **`config.py`** já lê 3 variáveis de ambiente distintas
+  (`RABBITMQ_URL`, `RABBITMQ_URL_PUBLISHER`, `RABBITMQ_URL_CONSUMIDOR`).
+  Hoje, como as duas últimas não existem ainda, ele cai de volta pra
+  credencial única sozinho (e avisa isso no log -- esperado, não é
+  erro).
+- No dia em que você criar `radar_publisher`/`radar_consumidor` (por
+  qualquer um dos 2 caminhos da seção 2), a migração é só preencher
+  essas 2 variáveis de ambiente -- **nenhuma linha de código muda**.
+
+## 3.1 Matriz de permissão -- o desenho alvo (pra quando as credenciais existirem)
 
 Baseado na documentação oficial do RabbitMQ sobre controle de acesso
 ([rabbitmq.com/docs/access-control](https://www.rabbitmq.com/docs/access-control)):
@@ -52,89 +95,48 @@ permissões no recurso.
 | `radar_publisher` | *(vazio)* | `^radar\.eventos$` | *(vazio)* |
 | `radar_consumidor` | `^fila\..*$` | `^amq\.default$` | `^fila\..*$` |
 
-Por que cada campo:
-- **radar_publisher.write = `^radar\.eventos$`** -- só publica na
-  exchange principal. Não lê nenhuma fila (nem a DLQ), não cria nem
-  apaga nada.
-- **radar_consumidor.read = `^fila\..*$`** -- lê `fila.enviar_convite`,
-  `fila.enviar_convite.prioritaria` e `fila.enviar_convite.dlq` (usada
-  só pela consulta passiva do monitor). Não lê nada fora do prefixo
-  `fila.`.
-- **radar_consumidor.write = `^amq\.default$`** -- é o mínimo pra
-  conseguir fazer `basic_publish(exchange="", routing_key=FILA_DLQ)`
-  (como o consumidor manda a mensagem morta pra DLQ). Repare que isso
-  NÃO dá acesso de escrita à exchange `radar.eventos` -- o consumidor
-  continua sem conseguir agir como produtor.
-- **radar_consumidor.configure = `^fila\..*$`** -- só entra por causa
-  da consulta passiva do monitor da DLQ (`queue_declare(passive=True)`).
-  Dependendo da versão do RabbitMQ do seu plano CloudAMQP, uma consulta
-  passiva pode exigir isso além de `read` -- deixar os dois cobre as
-  duas situações sem abrir mão do escopo (`fila.*`, nunca a exchange).
+Se um dia você seguir o caminho 1 ou 2 da seção 2, o passo a passo é:
+criar os 2 usuários (Admin → Add a user), colar essas 3 regexes em
+cada um (Permissions → escolher o vhost), gerar as 2 connection
+strings novas (mesmo host/vhost de hoje, só trocando usuário/senha) e
+preencher `RABBITMQ_URL_PUBLISHER`/`RABBITMQ_URL_CONSUMIDOR` no
+Render/Railway e no `.env` da VM Oracle.
 
-## 3. Passo a passo no painel do CloudAMQP
+## 4. O texto da Etapa 3 já reflete isso (seção 9) -- nada a esconder
 
-1. Entre na instância do CloudAMQP → botão **RabbitMQ Manager** (abre
-   a interface de administração do RabbitMQ, em outra aba).
-2. Aba **Admin** → **Add a user**:
-   - Username: `radar_publisher` / Password: gere uma senha forte →
-     **Add user**.
-   - Clique no usuário recém-criado → em **Permissions**, escolha o
-     vhost do projeto → cole os 3 campos da tabela acima (linha do
-     publisher) → **Set permission**.
-   - Repita pra `radar_consumidor` com a linha do consumidor.
-3. Anote as duas connection strings novas. O formato é o mesmo de
-   sempre, só trocando usuário/senha:
-   ```
-   amqps://radar_publisher:SENHA_AQUI@SEU-HOST.cloudamqp.com/SEU-VHOST
-   amqps://radar_consumidor:SENHA_AQUI@SEU-HOST.cloudamqp.com/SEU-VHOST
-   ```
-   (host e vhost são os MESMOS da sua `RABBITMQ_URL` atual -- só
-   usuário e senha mudam.)
+Pra um trabalho de Sistemas Distribuídos, identificar e documentar uma
+restrição real de infraestrutura (com a fonte oficial citada) é, em si,
+uma conclusão de arquitetura válida -- diferente de simplesmente não
+ter percebido o problema. O texto pronto da seção 9 já está escrito
+nesse tom: honesto sobre o estado atual, claro sobre o que foi
+projetado e por que ainda não está 100% ativo.
 
-## 4. Onde trocar as variáveis de ambiente
+## 5. O que fazer agora (resumo prático)
 
-Você tem processos rodando em mais de um lugar (ver `STACK.md` /
-`radar-consumidor.service`) -- atualize o `.env` (ou as env vars do
-painel) em **todos**:
-
-- **Render/Railway** (API + thread do `consumidor_continuo`, se ainda
-  estiver assim): painel do serviço → Environment/Variables → adicionar
-  `RABBITMQ_URL_PUBLISHER` e `RABBITMQ_URL_CONSUMIDOR`. Pode manter
-  `RABBITMQ_URL` (admin) lá também, sem problema -- só não é mais usada
-  em nenhum código que roda nesse serviço, exceto se você rodar o
-  script de provisionamento a partir dele.
-- **VM Oracle Cloud** (`workers/consumidor_continuo.py` via
-  `radar-consumidor.service`): editar `/home/ubuntu/mindpulse-backend/.env`
-  acrescentando as duas linhas novas, depois `sudo systemctl restart
-  radar-consumidor`.
-- **Seu `.env` local**, se for rodar os scripts de teste da sua máquina.
-
-## 5. Ordem de execução (importante seguir essa ordem)
-
-1. Criar os 2 usuários no CloudAMQP (seção 3).
-2. Com a credencial **admin** ainda configurada (a `RABBITMQ_URL` de
-   sempre), rodar, uma vez:
+1. Nada a fazer no CloudAMQP -- não existe usuário novo pra criar hoje.
+2. Aplicar os arquivos do zip entregue (sobrescreve os 6 existentes,
+   adiciona os 5 novos -- ver seção 8).
+3. Rodar **uma vez**, com a `RABBITMQ_URL` de sempre já configurada:
    ```
    python -m scripts.provisionar_topologia
    ```
-   Isso garante que exchange/filas/bindings já existem ANTES de trocar
-   o código -- essencial, porque o código novo não declara mais nada
-   sozinho.
-3. Atualizar os arquivos do projeto com os arquivos entregues (lista na
-   seção 8) e configurar `RABBITMQ_URL_PUBLISHER`/`RABBITMQ_URL_CONSUMIDOR`
-   em todo lugar (seção 4).
-4. Deploy normal (do seu jeito de sempre).
-5. Validar: disparar `POST /executar/enviar-pesquisa` (ou qualquer fluxo
-   que publique) e conferir nos logs que NENHUM erro de permissão
-   apareceu. Se aparecer `ACCESS_REFUSED`/`PERMISSION_DENIED`, revise a
-   regex daquele campo no CloudAMQP (o erro do RabbitMQ diz exatamente
-   qual operação e recurso foram negados).
+   (garante que a topologia existe -- o código novo não cria mais nada
+   sozinho em tempo de execução).
+4. Deploy normal, do seu jeito de sempre. Nenhuma variável de ambiente
+   nova é *obrigatória* -- `RABBITMQ_URL_PUBLISHER`/`RABBITMQ_URL_CONSUMIDOR`
+   ficando vazias é esperado, e o aviso que aparece no log confirma
+   isso (não é erro).
+5. Validar: disparar qualquer fluxo que publique (ex.:
+   `POST /executar/enviar-pesquisa`) e conferir que não apareceu
+   nenhum erro nos logs.
+6. Seguir pras seções 6 e 7 (teste de falha e monitoramento) -- essas
+   não dependem de nada da autorização, podem ser feitas já.
 
 ## 6. Rodar o teste de falha ao vivo (Etapa 4)
 
-Com tudo já migrado e um consumidor rodando (a thread contínua, o
-serviço na VM, ou o cron chamando `/executar/processar-fila-convites`
-com intervalo curto):
+Com um consumidor rodando (a thread contínua, o serviço na VM, ou o
+cron chamando `/executar/processar-fila-convites` com intervalo
+curto):
 
 ```
 python -m scripts.teste_falha_dlq
@@ -182,15 +184,15 @@ manual.
 
 ## 8. Arquivos entregues nesta etapa
 
-- `mindpulse-backend/config.py` -- 3 credenciais RabbitMQ em vez de 1.
+- `mindpulse-backend/config.py` -- lê as 3 variáveis, cai pra 1 sozinho.
 - `mindpulse-backend/clients/rabbitmq_client.py` -- conexões separadas
   por papel; `declarar_topologia` isolada pro script admin.
 - `mindpulse-backend/scripts/provisionar_topologia.py` -- novo.
 - `mindpulse-backend/scripts/teste_falha_dlq.py` -- novo.
-- `mindpulse-backend/workers/consumidor_continuo.py` -- usa credencial
-  de consumidor.
-- `mindpulse-backend/workers/consumidor_convites.py` -- usa credencial
-  de consumidor.
+- `mindpulse-backend/workers/consumidor_continuo.py` -- usa
+  `conectar_consumidor()`.
+- `mindpulse-backend/workers/consumidor_convites.py` -- usa
+  `conectar_consumidor()`.
 - `mindpulse-backend/jobs/monitorar_dlq.py` -- novo.
 - `mindpulse-backend/main.py` -- nova rota `POST /executar/monitorar-dlq`.
 - `mindpulse-backend/.env.example` -- documenta as variáveis novas.
@@ -201,18 +203,31 @@ manual.
 ### Etapa 3 -- Requisitos de segurança (autorização)
 
 > A autenticação é feita por usuário/senha do CloudAMQP em conexão
-> `amqps://` (TLS). A autorização segue o princípio do menor
-> privilégio, com 3 credenciais de papel distinto no mesmo vhost: uma
-> credencial administrativa, usada apenas no provisionamento manual da
-> topologia (criação de exchange, filas e bindings) e nunca por um
-> processo em produção; uma credencial de produtor, com permissão de
-> escrita restrita à exchange `radar.eventos` e nenhuma permissão de
-> leitura; e uma credencial de consumidor, com permissão de leitura
-> restrita às filas com prefixo `fila.` e permissão de escrita restrita
-> à exchange padrão (usada apenas para encaminhar manualmente uma
-> mensagem à fila morta). Nenhuma das credenciais de aplicação tem
-> permissão `configure`, ou seja, nenhum processo em produção consegue
-> criar, alterar ou apagar exchanges e filas -- apenas usá-las.
+> `amqps://` (TLS). Para a autorização, o projeto adota o princípio do
+> menor privilégio na camada de aplicação: a criação da topologia
+> (exchange, filas e bindings), que exige permissão administrativa
+> (`configure`), foi isolada em um script de provisionamento executado
+> manualmente; nenhum processo em execução contínua (produtores ou
+> consumidores) declara ou altera topologia em tempo de execução --
+> apenas utiliza os recursos já existentes. O código já está
+> estruturado para três credenciais de papel distinto no mesmo vhost
+> (administrativa, produtor com permissão de escrita restrita à
+> exchange principal, e consumidor com permissão de leitura restrita às
+> filas da aplicação), documentadas com a matriz completa de permissões
+> `configure`/`write`/`read` de cada uma.
+>
+> Durante a implementação, identificou-se uma restrição da
+> infraestrutura utilizada: o provedor gerenciado (CloudAMQP) reserva a
+> criação de usuários e permissões adicionais aos planos pagos
+> ("dedicados"), não a disponibilizando no plano gratuito compartilhado
+> usado neste projeto -- restrição documentada na própria FAQ do
+> provedor. Por esse motivo, as três credenciais de papel distinto
+> ainda não estão ativas com segredos diferentes em produção; a
+> separação de responsabilidades já implementada no código, porém,
+> permite que essa migração ocorra sem nenhuma alteração de software,
+> bastando provisionar as credenciais (via upgrade de plano ou
+> hospedagem própria do broker) e configurá-las como variáveis de
+> ambiente.
 
 ### Etapa 4 -- Exemplo de uso: caminho de falha
 

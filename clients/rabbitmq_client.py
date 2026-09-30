@@ -73,9 +73,9 @@ na primeira chamada depois disso.
 Autorização por papel (Etapa 3 do trabalho de Sistemas Distribuídos):
 até aqui, TODO mundo -- produtor e consumidor -- conectava com a MESMA
 credencial (acesso total ao vhost: cria, apaga, lê e escreve em
-qualquer fila ou exchange). Isso foi corrigido: agora existem 3
-credenciais distintas (ver config.py), cada uma só com o que precisa
-pra fazer o seu trabalho:
+qualquer fila ou exchange). O código abaixo já está pronto pra 3
+credenciais distintas (ver config.py), cada uma só com o que
+precisaria pra fazer o seu trabalho:
 
     RABBITMQ_URL (admin)       -- configure+write+read em tudo.
                                    Só usada por scripts/provisionar_topologia.py,
@@ -84,16 +84,23 @@ pra fazer o seu trabalho:
                                    configure e read vazios -- não lê fila
                                    nenhuma, não apaga nada, não vê a DLQ.
     RABBITMQ_URL_CONSUMIDOR     -- read só em "fila.*". write só na exchange
-                                   default ("^$", pra rotear direto por nome
-                                   de fila -- é como o consumidor manda a
-                                   mensagem morta pra DLQ). Não publica na
+                                   default (mapeada pelo RabbitMQ como
+                                   "amq.default" -- é como o consumidor manda
+                                   a mensagem morta pra DLQ). Não publica na
                                    exchange principal, não é um produtor.
 
-Por causa disso, este módulo NÃO redeclara mais a topologia a cada
-conexão (isso exigia permissão "configure", que nem publicador nem
-consumidor têm mais) -- ela só é criada/alterada pelo script de
-provisionamento, com a credencial admin. Ver RABBITMQ_AUTORIZACAO.md
-pros valores exatos de permissão a cadastrar no painel do CloudAMQP.
+RESSALVA IMPORTANTE (documentada em RABBITMQ_AUTORIZACAO.md): o plano
+gratuito da CloudAMQP usado neste projeto (Little Lemur, compartilhado)
+não permite criar usuários/permissões novos -- isso só existe nos
+planos "dedicados" pagos. Ou seja, HOJE as 3 variáveis acima apontam
+pra credencial única de sempre (config.py cai de volta sozinho, com um
+aviso no log) -- os 3 papéis abaixo (conectar_admin/publicador/
+consumidor) são uma separação real no CÓDIGO, esperando as credenciais
+reais existirem. O ganho concreto de agora: nenhum processo em
+produção (jobs, workers) usa mais permissão "configure" -- só o script
+de provisionamento declara topologia, manualmente. Ver
+RABBITMQ_AUTORIZACAO.md pra matriz completa e os dois caminhos que
+destravam credenciais de verdade (upgrade de plano ou self-host).
 """
 import json
 import time
