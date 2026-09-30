@@ -23,6 +23,7 @@ Dois esquemas de segurança (ver clients/auth.py):
 - JWT do Supabase → endpoints chamados por RH logado
 - Chave de sistema → endpoints chamados por automação/webhook
 """
+import threading
 from datetime import datetime, timezone
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
@@ -34,7 +35,7 @@ from config import BREVO_WEBHOOK_SECRET
 from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead, supabase_proxy
 from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
-from workers import consumidor_convites
+from workers import consumidor_continuo, consumidor_convites
 
 # Origens autorizadas a chamar o backend diretamente do navegador.
 # Sem isso, o navegador bloqueia a chamada mesmo com JWT correto
@@ -58,6 +59,23 @@ app.add_middleware(
 )
 
 app.include_router(supabase_proxy.router)
+
+
+# Processo separado de verdade (Etapa 2.a) não coube no orçamento --
+# Render free não sustenta um Background Worker de graça, e configurar
+# uma VM externa (Oracle Cloud) ficou inviável no prazo. Solução:
+# o consumidor contínuo (workers/consumidor_continuo.py) roda como uma
+# thread dedicada, iniciada junto com o servidor -- consome sozinho,
+# pra sempre, em paralelo às requisições HTTP, sem que nenhuma rota
+# precise chamar ele. Se o Render "dormir" por inatividade, a thread
+# para junto (mesma limitação de sempre) e volta a rodar sozinha no
+# próximo start do processo -- nada se perde nesse meio tempo, porque
+# as mensagens continuam guardadas na fila do RabbitMQ até alguém
+# consumir de verdade.
+@app.on_event("startup")
+def iniciar_consumidor_continuo():
+    thread = threading.Thread(target=consumidor_continuo.rodar_para_sempre, daemon=True)
+    thread.start()
 
 
 @app.middleware("http")
