@@ -32,7 +32,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from clients.auth import verificar_admin, verificar_chave_sistema, verificar_jwt_supabase, verificar_rh_pertence_a_empresa
 from clients.supabase_client import supabase
 from config import BREVO_WEBHOOK_SECRET
-from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico
+from jobs import enviar_pesquisa, lembrete_diario, lembrete_segundo, encerrar_automatico, monitorar_dlq
 from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead, supabase_proxy
 from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
 from workers import consumidor_continuo, consumidor_convites
@@ -134,6 +134,15 @@ def executar_processar_fila_convites():
     # devolver o resultado (quantas enviadas/reencaminhadas/mortas) é
     # útil pra acompanhar no painel do cron-job.org.
     return consumidor_convites.processar_lote()
+
+
+@app.post("/executar/monitorar-dlq", dependencies=[Depends(verificar_chave_sistema)])
+def executar_monitorar_dlq():
+    # Boas práticas de integridade (Etapa 5): confere a fila morta
+    # (fila.enviar_convite.dlq) e alerta a equipe por e-mail se houver
+    # mensagem parada -- ver jobs/monitorar_dlq.py. Sugestão de cron
+    # externo: a cada 10-15 minutos.
+    return monitorar_dlq.rodar()
 
 
 @app.post("/notificar-alerta-critico", dependencies=[Depends(verificar_chave_sistema)])

@@ -22,6 +22,12 @@ worker é chamado por HTTP (POST /executar/processar-fila-convites,
 protegido por X-API-Key) periodicamente por um cron externo. Cada
 chamada processa até `max_mensagens` e devolve; se a fila estiver
 maior que isso, a próxima chamada do cron continua de onde parou.
+
+Autorização por papel (Etapa 3): conecta com RABBITMQ_URL_CONSUMIDOR
+(mesma credencial restrita do consumidor_continuo.py), não mais com a
+credencial admin -- não chama mais declarar_topologia() por não ter
+mais permissão "configure". A topologia precisa já existir (ver
+scripts/provisionar_topologia.py).
 """
 import json
 from datetime import datetime, timezone
@@ -31,8 +37,7 @@ from clients.rabbitmq_client import (
     FILA_DLQ,
     FILA_PRINCIPAL,
     MAX_TENTATIVAS,
-    conectar,
-    declarar_topologia,
+    conectar_consumidor,
     tentativas_anteriores,
 )
 from clients.supabase_client import supabase
@@ -81,12 +86,11 @@ def _atualizar_status_item(envio_item_id: str | None, status: str, mensagem_id_b
 
 
 def processar_lote(max_mensagens: int = 50) -> dict:
-    conexao = conectar()
+    conexao = conectar_consumidor()
     processadas = sucesso = reencaminhadas = mortas = duplicadas = 0
 
     try:
         canal = conexao.channel()
-        declarar_topologia(canal)
         canal.basic_qos(prefetch_count=10)
 
         while processadas < max_mensagens:

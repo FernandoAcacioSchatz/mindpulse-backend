@@ -17,9 +17,46 @@ SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
 
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-# Connection string do RabbitMQ (CloudAMQP) -- formato amqps://user:senha@host/vhost.
-# Nunca hardcoded; configurar como variável de ambiente no Render.
+# Connection strings do RabbitMQ (CloudAMQP) -- formato amqps://user:senha@host/vhost.
+# Nunca hardcoded; configurar como variável de ambiente no Render/VM.
+#
+# Autorização por papel (Etapa 3 do trabalho de Sistemas Distribuídos --
+# antes disso, um único usuário com acesso total fazia tudo, produtor e
+# consumidor, sem nenhuma separação de permissão real):
+#
+# - RABBITMQ_URL              -- credencial ADMIN (a original). Único uso
+#   permitido: scripts/provisionar_topologia.py, rodado manualmente sempre
+#   que a topologia (exchange/filas/bindings) precisa ser criada ou mudar.
+#   NUNCA usada pelos processos que ficam no ar (jobs, workers, rotas).
+# - RABBITMQ_URL_PUBLISHER    -- usuário "radar_publisher": só publica na
+#   exchange radar.eventos (permissão write nela, configure e read vazios).
+#   Usada por clients/rabbitmq_client.py::publicar_mensagens (chamada
+#   pelos jobs que enfileiram convites/lembretes).
+# - RABBITMQ_URL_CONSUMIDOR   -- usuário "radar_consumidor": só lê/consome
+#   das filas fila.* (permissão read nelas) e só publica na exchange
+#   default/nomeless (permissão write == "^$", usada pra mandar mensagem
+#   pra DLQ por nome de fila). Usada pelos dois workers consumidores e
+#   pelo monitor da DLQ (jobs/monitorar_dlq.py).
+#
+# Ver o runbook entregue junto (RABBITMQ_AUTORIZACAO.md) pros valores
+# exatos de configure/write/read a cadastrar no painel do CloudAMQP.
 RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "")
+RABBITMQ_URL_PUBLISHER = os.environ.get("RABBITMQ_URL_PUBLISHER", "")
+RABBITMQ_URL_CONSUMIDOR = os.environ.get("RABBITMQ_URL_CONSUMIDOR", "")
+
+if RABBITMQ_URL and (not RABBITMQ_URL_PUBLISHER or not RABBITMQ_URL_CONSUMIDOR):
+    # Fallback só pra não quebrar um deploy antigo enquanto os usuários
+    # novos não foram criados no CloudAMQP -- ver runbook. Uma vez migrado,
+    # RABBITMQ_URL (admin) não deveria mais aparecer nesse print nunca.
+    print(
+        "[config] AVISO: RABBITMQ_URL_PUBLISHER e/ou RABBITMQ_URL_CONSUMIDOR não "
+        "configuradas -- caindo de volta pra credencial admin (RABBITMQ_URL) por "
+        "enquanto. Isso NÃO tem a separação de autorização da Etapa 3; crie os "
+        "usuários radar_publisher/radar_consumidor no CloudAMQP e configure as "
+        "duas variáveis novas assim que possível."
+    )
+    RABBITMQ_URL_PUBLISHER = RABBITMQ_URL_PUBLISHER or RABBITMQ_URL
+    RABBITMQ_URL_CONSUMIDOR = RABBITMQ_URL_CONSUMIDOR or RABBITMQ_URL
 
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
 BREVO_SENDER_EMAIL = os.environ.get("BREVO_SENDER_EMAIL", "contato@mindpulse.app")

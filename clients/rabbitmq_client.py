@@ -69,13 +69,38 @@ dead-letter), é preciso apagar as duas manualmente no painel da
 CloudAMQP (RabbitMQ Manager -> Queues and Streams) antes do primeiro
 deploy com este arquivo -- elas são recriadas sozinhas, do jeito novo,
 na primeira chamada depois disso.
+
+Autorização por papel (Etapa 3 do trabalho de Sistemas Distribuídos):
+até aqui, TODO mundo -- produtor e consumidor -- conectava com a MESMA
+credencial (acesso total ao vhost: cria, apaga, lê e escreve em
+qualquer fila ou exchange). Isso foi corrigido: agora existem 3
+credenciais distintas (ver config.py), cada uma só com o que precisa
+pra fazer o seu trabalho:
+
+    RABBITMQ_URL (admin)       -- configure+write+read em tudo.
+                                   Só usada por scripts/provisionar_topologia.py,
+                                   rodado manualmente. NUNCA em produção.
+    RABBITMQ_URL_PUBLISHER      -- write só em "radar.eventos" (a exchange).
+                                   configure e read vazios -- não lê fila
+                                   nenhuma, não apaga nada, não vê a DLQ.
+    RABBITMQ_URL_CONSUMIDOR     -- read só em "fila.*". write só na exchange
+                                   default ("^$", pra rotear direto por nome
+                                   de fila -- é como o consumidor manda a
+                                   mensagem morta pra DLQ). Não publica na
+                                   exchange principal, não é um produtor.
+
+Por causa disso, este módulo NÃO redeclara mais a topologia a cada
+conexão (isso exigia permissão "configure", que nem publicador nem
+consumidor têm mais) -- ela só é criada/alterada pelo script de
+provisionamento, com a credencial admin. Ver RABBITMQ_AUTORIZACAO.md
+pros valores exatos de permissão a cadastrar no painel do CloudAMQP.
 """
 import json
 import time
 
 import pika
 
-from config import RABBITMQ_URL
+from config import RABBITMQ_URL, RABBITMQ_URL_CONSUMIDOR, RABBITMQ_URL_PUBLISHER
 
 EXCHANGE = "radar.eventos"
 
@@ -95,19 +120,41 @@ MAX_TENTATIVAS_PUBLICACAO = 3  # retry do PRODUTOR (confirmar que a mensagem ent
 ESPERA_ENTRE_TENTATIVAS_S = 0.5
 
 
-def conectar() -> pika.BlockingConnection:
-    if not RABBITMQ_URL:
-        raise RuntimeError("RABBITMQ_URL não configurada no ambiente.")
-    parametros = pika.URLParameters(RABBITMQ_URL)
+def _conectar(url: str, nome_credencial: str) -> pika.BlockingConnection:
+    if not url:
+        raise RuntimeError(
+            f"{nome_credencial} não configurada no ambiente. Ver RABBITMQ_AUTORIZACAO.md."
+        )
+    parametros = pika.URLParameters(url)
     return pika.BlockingConnection(parametros)
+
+
+def conectar_admin() -> pika.BlockingConnection:
+    """Credencial de acesso total -- só pra scripts/provisionar_topologia.py."""
+    return _conectar(RABBITMQ_URL, "RABBITMQ_URL")
+
+
+def conectar_publicador() -> pika.BlockingConnection:
+    """Credencial do papel 'produtor' -- write só na exchange radar.eventos."""
+    return _conectar(RABBITMQ_URL_PUBLISHER, "RABBITMQ_URL_PUBLISHER")
+
+
+def conectar_consumidor() -> pika.BlockingConnection:
+    """Credencial do papel 'consumidor' -- read só nas filas fila.*."""
+    return _conectar(RABBITMQ_URL_CONSUMIDOR, "RABBITMQ_URL_CONSUMIDOR")
 
 
 def declarar_topologia(canal) -> None:
     """
-    Idempotente -- seguro chamar toda vez que conecta, DESDE QUE os
-    argumentos não mudem entre uma chamada e outra (ver aviso no
-    docstring do módulo sobre apagar as filas manualmente na primeira
-    vez que este arquivo for publicado).
+    Cria/confirma exchange, filas e bindings. Exige permissão
+    "configure" em tudo -- por isso só é chamada pelo script de
+    provisionamento (scripts/provisionar_topologia.py), com a
+    credencial admin. Produtor e consumidor, em produção, NUNCA
+    chamam esta função -- eles só usam recursos que já existem.
+
+    Idempotente -- seguro chamar de novo, DESDE QUE os argumentos não
+    mudem entre uma chamada e outra (ver aviso no docstring do módulo
+    sobre apagar as filas manualmente antes de mudar algum argumento).
     """
     canal.exchange_declare(exchange=EXCHANGE, exchange_type="direct", durable=True)
 
@@ -205,27 +252,33 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
     resultados = [False] * len(mensagens)
     conexao = None
 
-    # Conectar e declarar a topologia ficam FORA do loop de mensagens e em
-    # try/except próprio, de propósito: se isso falhar (broker fora do ar,
-    # exchange/fila com argumento incompatível, etc.), NENHUMA mensagem foi
-    # publicada -- e antes essa exceção escapava sem ser tratada, pulando
-    # direto pra fora da função. Quem chama (jobs/enviar_pesquisa.py) só
-    # desfaz o token de um funcionário quando `publicar_mensagens` DEVOLVE
-    # False pra ele -- uma exceção não devolve nada, então os tokens já
-    # criados no Passo 1 ficavam órfãos pra sempre (a checagem de
-    # idempotência olha só "existe token?", não "foi enfileirado de
-    # verdade?"). Bug real observado: a troca do tipo do exchange quebrou
-    # bem aqui, e 100 tokens + itens de lote ficaram travados em
-    # "pendente", enquanto a pesquisa foi marcada "enviada" na tentativa
-    # seguinte (sem sobrar nenhuma "falha" pra reportar, já que não havia
-    # mais ninguém pra tentar enviar -- todos "já tinham token").
+    # Conectar fica FORA do loop de mensagens e em try/except próprio, de
+    # propósito: se isso falhar (broker fora do ar, credencial sem
+    # permissão, etc.), NENHUMA mensagem foi publicada -- e antes essa
+    # exceção escapava sem ser tratada, pulando direto pra fora da função.
+    # Quem chama (jobs/enviar_pesquisa.py) só desfaz o token de um
+    # funcionário quando `publicar_mensagens` DEVOLVE False pra ele -- uma
+    # exceção não devolve nada, então os tokens já criados no Passo 1
+    # ficavam órfãos pra sempre (a checagem de idempotência olha só "existe
+    # token?", não "foi enfileirado de verdade?"). Bug real observado: a
+    # troca do tipo do exchange quebrou bem aqui, e 100 tokens + itens de
+    # lote ficaram travados em "pendente", enquanto a pesquisa foi marcada
+    # "enviada" na tentativa seguinte (sem sobrar nenhuma "falha" pra
+    # reportar, já que não havia mais ninguém pra tentar enviar -- todos
+    # "já tinham token").
+    #
+    # NÃO chama mais declarar_topologia() aqui (Etapa 3 -- autorização):
+    # a credencial de publicador não tem permissão "configure", só "write"
+    # na exchange. A topologia já precisa existir de antes, criada pelo
+    # script de provisionamento com a credencial admin. Se a exchange não
+    # existir ainda, o publish abaixo falha com um erro claro do broker
+    # (404 NOT_FOUND), pego pelo mesmo retry/except de sempre.
     try:
-        conexao = conectar()
+        conexao = conectar_publicador()
         canal = conexao.channel()
-        declarar_topologia(canal)
         canal.confirm_delivery()  # publisher confirms: garante que o broker recebeu antes de seguir
     except Exception as e:
-        print(f"[rabbitmq_client] Não foi possível conectar/declarar a topologia -- lote inteiro falhou ({len(mensagens)} mensagens): {e}")
+        print(f"[rabbitmq_client] Não foi possível conectar como publicador -- lote inteiro falhou ({len(mensagens)} mensagens): {e}")
         try:
             if conexao is not None and conexao.is_open:
                 conexao.close()
@@ -268,9 +321,8 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
                         pass
                     try:
                         time.sleep(ESPERA_ENTRE_TENTATIVAS_S)
-                        conexao = conectar()
+                        conexao = conectar_publicador()
                         canal = conexao.channel()
-                        declarar_topologia(canal)
                         canal.confirm_delivery()
                     except Exception as e:
                         print(f"[rabbitmq_client] Falha ao reconectar (tentativa {tentativa}/{MAX_TENTATIVAS_PUBLICACAO}): {e}")

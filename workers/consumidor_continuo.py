@@ -22,6 +22,15 @@ já estivesse na fila antes dessa mudança.
 Se a conexão cair (rede, restart do broker, etc.), reconecta sozinho
 e continua de onde parou, sem precisar de nada externo chamando ele
 de novo.
+
+Autorização por papel (Etapa 3): conecta com RABBITMQ_URL_CONSUMIDOR,
+não mais com a credencial admin -- essa credencial só consegue ler
+fila.* e publicar na exchange default (usada pra mandar pra DLQ), não
+consegue declarar/apagar nada nem publicar na exchange principal. Por
+isso este worker NÃO chama mais declarar_topologia() -- a topologia
+já precisa existir de antes (ver scripts/provisionar_topologia.py). Se
+a fila ainda não existir, a conexão falha com um erro claro do broker
+em vez de tentar (e falhar) criar a fila sozinha.
 """
 import json
 import time
@@ -33,8 +42,7 @@ from clients.rabbitmq_client import (
     FILA_PRINCIPAL,
     FILA_PRIORITARIA,
     MAX_TENTATIVAS,
-    conectar,
-    declarar_topologia,
+    conectar_consumidor,
     tentativas_anteriores,
 )
 from clients.supabase_client import supabase
@@ -171,9 +179,8 @@ def rodar_para_sempre() -> None:
     while True:
         conexao = None
         try:
-            conexao = conectar()
+            conexao = conectar_consumidor()
             canal = conexao.channel()
-            declarar_topologia(canal)
             canal.basic_qos(prefetch_count=10)
             print("[consumidor_continuo] Conectado, esperando mensagens...")
 
