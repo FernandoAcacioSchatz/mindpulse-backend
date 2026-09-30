@@ -5,13 +5,16 @@ topologia inteira do RabbitMQ: exchange, filas, bindings, retry e DLQ
 completo).
 
 Etapa 3 do trabalho de Sistemas Distribuídos (autorização): este é o
-ÚNICO lugar do projeto que ainda usa a credencial admin (RABBITMQ_URL,
-acesso total ao vhost). Todo o resto -- jobs que publicam, workers que
-consomem, o monitor da DLQ -- usa credenciais novas, muito mais
-restritas (RABBITMQ_URL_PUBLISHER / RABBITMQ_URL_CONSUMIDOR, ver
-config.py e RABBITMQ_AUTORIZACAO.md). Rodar este script é a ÚNICA
-situação em que a credencial admin deveria ser usada -- nunca num
-processo que fica no ar.
+ÚNICO lugar do projeto que usa (ou deveria usar) a credencial admin
+(RABBITMQ_URL, acesso total ao vhost). Todo o resto -- jobs que
+publicam, workers que consomem, o monitor da DLQ -- já foi escrito pra
+usar credenciais de papel restrito (RABBITMQ_URL_PUBLISHER /
+RABBITMQ_URL_CONSUMIDOR), mas essas ainda NÃO existem de verdade hoje
+(o plano gratuito da CloudAMQP não permite criar usuário novo -- ver
+RABBITMQ_AUTORIZACAO.md), então na prática tudo roda com a mesma
+credencial admin por enquanto. Mesmo assim, rodar este script continua
+sendo a única situação em que essa credencial deveria ser usada
+manualmente -- nunca dentro de um processo que fica no ar.
 
 Quando rodar:
 - Na primeira vez que o projeto for provisionado num vhost novo.
@@ -49,10 +52,9 @@ def provisionar() -> None:
         print(f"  fila retry priorit.: {FILA_RETRY_PRIORITARIA}")
         print(f"  fila DLQ           : {FILA_DLQ}")
         print(
-            "[provisionar_topologia] Pronto. Confira no painel do CloudAMQP que os "
-            "usuários radar_publisher e radar_consumidor têm SÓ as permissões do "
-            "RABBITMQ_AUTORIZACAO.md -- eles não precisam (e não devem) conseguir "
-            "rodar este script."
+            "[provisionar_topologia] Pronto. Enquanto radar_publisher/radar_consumidor "
+            "não existirem de verdade (ver RABBITMQ_AUTORIZACAO.md), não precisa rodar "
+            "mais nada aqui -- pode seguir pro deploy e pros testes de falha/monitoramento."
         )
     finally:
         conexao.close()
