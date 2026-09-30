@@ -32,7 +32,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from clients.supabase_client import supabase
-from clients.rabbitmq_client import publicar_convites
+from clients.rabbitmq_client import publicar_mensagens
 
 
 def rodar() -> dict:
@@ -191,7 +191,7 @@ def publicar_e_finalizar(preparo: dict) -> dict:
     if not fila_de_envio:
         return {**preparo, "falhas_ao_enfileirar": []}
 
-    resultados = publicar_convites(preparo["mensagens"])
+    resultados = publicar_mensagens(preparo["mensagens"])  # routing_key default = envio inicial (normal)
 
     falhas = []
     for (funcionario, token, envio_item), sucesso in zip(fila_de_envio, resultados):
