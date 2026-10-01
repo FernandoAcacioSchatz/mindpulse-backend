@@ -37,21 +37,42 @@ intervalo maior que isso, cada chamada avança uma tentativa -- pode
 levar até N execuções do cron pra fechar o ciclo, não ~100s corridos.
 
 Autorização por papel (Etapa 3): publica com RABBITMQ_URL_PUBLISHER --
-a MESMA credencial restrita usada em produção por
-clients/rabbitmq_client.py::publicar_mensagens. Não precisa de
-nenhuma credencial especial pra rodar este teste -- prova que o
-publicador consegue colocar uma mensagem na fila (é o trabalho dele),
-mesmo essa mensagem sendo inválida; validar o conteúdo é
-responsabilidade do consumidor, não do transporte.
+a mesma variável usada em produção por
+clients/rabbitmq_client.py::publicar_mensagens. Enquanto o usuário
+radar_publisher não existir de verdade (plano gratuito da CloudAMQP
+não permite criar usuário novo -- ver RABBITMQ_AUTORIZACAO.md), essa
+variável cai pra credencial única de sempre; o dia que existir, este
+script já publica com ela sem precisar mudar nada aqui.
+
+Retentativa: a conexão com um broker gratuito compartilhado pode cair,
+ou o broker pode recusar a mensagem de verdade (exceção real). Nesses
+casos este script tenta até 3 vezes, reabrindo a conexão entre uma
+tentativa e outra, antes de desistir.
+
+IMPORTANTE (bug corrigido): com `canal.confirm_delivery()` ativo, o
+`pika` NUNCA devolve `True`/`False` no retorno de `basic_publish` --
+ele sempre devolve `None` (ver padrão oficial em
+https://pika.readthedocs.io/en/stable/examples/blocking_delivery_confirmations.html).
+Quem indica se a publicação foi confirmada é a AUSÊNCIA de exceção, não
+o valor de retorno. A versão anterior deste script guardava o retorno
+numa variável e checava `if publicado:` -- como o retorno é sempre
+`None` (valor "falso" em Python), ela reportava "não confirmado" SEMPRE,
+mesmo quando a mensagem tinha sido publicada com sucesso (foi
+exatamente isso que gerou várias mensagens duplicadas na DLQ ao rodar
+este script mais de uma vez).
 
 Como rodar (da raiz do projeto):
     python -m scripts.teste_falha_dlq
 """
 import json
+import time
 
 import pika
 
 from clients.rabbitmq_client import EXCHANGE, ROUTING_KEY_NORMAL, conectar_publicador
+
+MAX_TENTATIVAS = 3
+ESPERA_ENTRE_TENTATIVAS_S = 1.0
 
 
 def publicar_mensagem_quebrada() -> None:
@@ -64,32 +85,59 @@ def publicar_mensagem_quebrada() -> None:
     }
     corpo = json.dumps(mensagem).encode("utf-8")
 
-    print("[teste_falha_dlq] Conectando como publicador (RABBITMQ_URL_PUBLISHER)...")
-    conexao = conectar_publicador()
-    try:
-        canal = conexao.channel()
-        canal.confirm_delivery()
-        publicado = canal.basic_publish(
-            exchange=EXCHANGE,
-            routing_key=ROUTING_KEY_NORMAL,
-            body=corpo,
-            properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
-            mandatory=True,
-        )
-    finally:
-        conexao.close()
+    publicado = False
+    for tentativa in range(1, MAX_TENTATIVAS + 1):
+        print(f"[teste_falha_dlq] Conectando como publicador (tentativa {tentativa}/{MAX_TENTATIVAS})...")
+        conexao = conectar_publicador()
+        try:
+            canal = conexao.channel()
+            canal.confirm_delivery()
+            canal.basic_publish(
+                exchange=EXCHANGE,
+                routing_key=ROUTING_KEY_NORMAL,
+                body=corpo,
+                properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
+                mandatory=True,
+            )
+            # Chegou até aqui sem exceção -- o broker confirmou o
+            # recebimento (ver nota no docstring do módulo).
+            publicado = True
+        except (pika.exceptions.UnroutableError, pika.exceptions.NackError) as e:
+            print(f"[teste_falha_dlq] Broker recusou a mensagem (tentativa {tentativa}/{MAX_TENTATIVAS}): {e}")
+            publicado = False
+        except Exception as e:
+            print(f"[teste_falha_dlq] Erro ao publicar (tentativa {tentativa}/{MAX_TENTATIVAS}): {e}")
+            publicado = False
+        finally:
+            conexao.close()
+
+        if publicado:
+            break
+
+        if tentativa < MAX_TENTATIVAS:
+            print(
+                f"[teste_falha_dlq] Falha real ao publicar -- "
+                f"tentando de novo em {ESPERA_ENTRE_TENTATIVAS_S}s..."
+            )
+            time.sleep(ESPERA_ENTRE_TENTATIVAS_S)
 
     if not publicado:
-        print("[teste_falha_dlq] O broker NÃO confirmou o recebimento -- tente rodar de novo.")
+        print(
+            f"[teste_falha_dlq] Desisti depois de {MAX_TENTATIVAS} tentativas -- "
+            "dessa vez é uma falha de verdade (veja o erro de cada tentativa "
+            "acima): conexão caindo ou o broker recusando a mensagem. Confira "
+            "RABBITMQ_URL/RABBITMQ_URL_PUBLISHER e se o serviço no Render está "
+            "no ar antes de rodar de novo."
+        )
         return
 
     print(f"[teste_falha_dlq] Mensagem de teste publicada: {mensagem}")
     print(
-        "[teste_falha_dlq] Agora acompanhe os logs do consumidor (Render/Railway ou "
-        "journalctl -u radar-consumidor -f na VM) e o painel do CloudAMQP "
-        "(fila.enviar_convite -> fila.enviar_convite.retry -> de volta -> "
-        "3x -> fila.enviar_convite.dlq). Deve levar entre ~70 e ~100 segundos "
-        "se o consumidor contínuo estiver rodando."
+        "[teste_falha_dlq] Agora acompanhe os logs do consumidor no Render "
+        "(o backend só roda lá, a thread contínua é iniciada por main.py) e o "
+        "painel do CloudAMQP (fila.enviar_convite -> fila.enviar_convite.retry "
+        "-> de volta -> 3x -> fila.enviar_convite.dlq). Deve levar entre ~70 e "
+        "~100 segundos se o consumidor contínuo estiver rodando."
     )
 
 

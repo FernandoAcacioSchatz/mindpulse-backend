@@ -50,16 +50,29 @@ Uma conexão por lote (não por mensagem): o CloudAMQP free tier
 todos os convites de uma pesquisa numa única conexão/canal é
 importante, não só otimização.
 
-Retentativa na PUBLICAÇÃO (diferente do retry do consumidor): de vez
-em quando, principalmente em broker gratuito compartilhado, o RabbitMQ
-não confirma a primeira publicação de uma mensagem (a chamada volta
-"não confirmado", sem nenhum erro de conexão visível). Isso não tem
-nada a ver com MAX_TENTATIVAS (que é do consumidor, controla reenvio
-de e-mail via fila.enviar_convite.retry) -- aqui é antes disso, é
-sobre conseguir colocar a mensagem na fila em primeiro lugar.
-MAX_TENTATIVAS_PUBLICACAO trata isso: tenta de novo, reabrindo a
-conexão do zero se preciso, antes de desistir daquela mensagem
-específica -- sem abortar o lote inteiro por causa de 1 mensagem.
+Retentativa na PUBLICAÇÃO (diferente do retry do consumidor): a conexão
+com um broker gratuito compartilhado pode cair, ou o broker pode
+recusar a mensagem de verdade (exceção real) -- isso não tem nada a ver
+com MAX_TENTATIVAS (que é do consumidor, controla reenvio de e-mail via
+fila.enviar_convite.retry) -- aqui é antes disso, é sobre conseguir
+colocar a mensagem na fila em primeiro lugar. MAX_TENTATIVAS_PUBLICACAO
+trata isso: tenta de novo, reabrindo a conexão do zero se preciso, antes
+de desistir daquela mensagem específica -- sem abortar o lote inteiro
+por causa de 1 mensagem.
+
+BUG CORRIGIDO (importante): com `canal.confirm_delivery()` ativo, o
+`pika` NUNCA devolve `True`/`False` no retorno de `basic_publish` --
+ele sempre devolve `None` (ver padrão oficial em
+https://pika.readthedocs.io/en/stable/examples/blocking_delivery_confirmations.html).
+Quem indica que a publicação foi confirmada é a AUSÊNCIA de exceção, não
+o valor de retorno. A versão anterior desta função guardava o retorno em
+`publicado` e checava `if publicado:` -- como o retorno é sempre `None`
+("falso" em Python), ela tratava TODA publicação como "não confirmada",
+mesmo as que tinham funcionado -- reconectava, tentava de novo (podendo
+publicar a MESMA mensagem mais de uma vez) e, no fim, devolvia `False`
+pra quem chamou mesmo quando a mensagem já estava na fila. É muito
+provável que isso explique o bug histórico citado abaixo (tokens
+ficando "pendente" com a mensagem já enfileirada).
 
 IMPORTANTE ao fazer deploy desta versão: o RabbitMQ não deixa
 redeclarar uma fila já existente com argumentos diferentes dos que ela
@@ -300,13 +313,20 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
 
             for tentativa in range(1, MAX_TENTATIVAS_PUBLICACAO + 1):
                 try:
-                    publicado = canal.basic_publish(
+                    canal.basic_publish(
                         exchange=EXCHANGE,
                         routing_key=routing_key,
                         body=corpo,
                         properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
                         mandatory=True,
                     )
+                    # Chegou até aqui sem exceção -- o broker confirmou o
+                    # recebimento (ver nota no docstring do módulo: basic_publish
+                    # nunca devolve True/False com confirm_delivery() ativo).
+                    publicado = True
+                except (pika.exceptions.UnroutableError, pika.exceptions.NackError) as e:
+                    print(f"[rabbitmq_client] Broker recusou a mensagem (tentativa {tentativa}/{MAX_TENTATIVAS_PUBLICACAO}): {e}")
+                    publicado = False
                 except Exception as e:
                     print(f"[rabbitmq_client] Erro ao publicar (tentativa {tentativa}/{MAX_TENTATIVAS_PUBLICACAO}): {e}")
                     publicado = False
@@ -315,13 +335,13 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
                     break
 
                 if tentativa < MAX_TENTATIVAS_PUBLICACAO:
-                    # Não confirmado (ou deu erro) -- reabre a conexão do zero antes
+                    # Falha real (exceção) -- reabre a conexão do zero antes
                     # de tentar de novo, caso o problema seja a conexão/canal, não
-                    # só uma confirmação isolada perdida. Essa reconexão TAMBÉM pode
+                    # só a mensagem específica. Essa reconexão TAMBÉM pode
                     # falhar (mesma classe de problema do bloco de cima) -- por isso
                     # também fica protegida, em vez de deixar escapar e perder o
                     # resultado das mensagens já processadas.
-                    print(f"[rabbitmq_client] Mensagem não confirmada, tentativa {tentativa}/{MAX_TENTATIVAS_PUBLICACAO}, reconectando...")
+                    print(f"[rabbitmq_client] Falha ao publicar, tentativa {tentativa}/{MAX_TENTATIVAS_PUBLICACAO}, reconectando...")
                     try:
                         conexao.close()
                     except Exception:
