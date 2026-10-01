@@ -3,8 +3,8 @@
 .env.*
 !.env.example
 
-
-*.md
+#arquivi .md
+ETAPAS_3_4_5_MENSAGERIA.md
 
 # Python
 __pycache__/
