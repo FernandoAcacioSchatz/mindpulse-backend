@@ -37,13 +37,10 @@ from routes import admin, encerrar_pesquisa, notificar_critico, notificar_lead, 
 from schemas import AtualizarStatusLeadPayload, EncerrarPesquisaPayload, NotificarCriticoPayload, NotificarLeadPayload, ProvisionarEmpresaPayload, SalvarObservacaoLeadPayload
 from workers import consumidor_continuo, consumidor_convites
 
-# Origens autorizadas a chamar o backend diretamente do navegador.
-# Sem isso, o navegador bloqueia a chamada mesmo com JWT correto
-# (é proteção do próprio navegador, não do backend).
 ORIGENS_PERMITIDAS = [
-    "https://mindpulse-app.vercel.app",   # app em produção (nome original)
-    "https://radar-empresa.vercel.app",   # app em produção (confirmado no navegador)
-    "http://127.0.0.1:5500",              # Live Server, teste local
+    "https://mindpulse-app.vercel.app",
+    "https://radar-empresa.vercel.app",
+    "http://127.0.0.1:5500",
     "http://localhost:5500",
 ]
 
@@ -53,25 +50,14 @@ app = FastAPI(title="Radar Backend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGENS_PERMITIDAS,
-    allow_credentials=True,  # obrigatório pro cookie httpOnly viajar entre domínios (Vercel <-> Render)
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "PUT"],
-    allow_headers=["*"],  # aceita qualquer cabeçalho pedido -- evita ficar descobrindo nome por nome
+    allow_headers=["*"],
 )
 
 app.include_router(supabase_proxy.router)
 
 
-# Processo separado de verdade (Etapa 2.a) não coube no orçamento --
-# Render free não sustenta um Background Worker de graça, e configurar
-# uma VM externa (Oracle Cloud) ficou inviável no prazo. Solução:
-# o consumidor contínuo (workers/consumidor_continuo.py) roda como uma
-# thread dedicada, iniciada junto com o servidor -- consome sozinho,
-# pra sempre, em paralelo às requisições HTTP, sem que nenhuma rota
-# precise chamar ele. Se o Render "dormir" por inatividade, a thread
-# para junto (mesma limitação de sempre) e volta a rodar sozinha no
-# próximo start do processo -- nada se perde nesse meio tempo, porque
-# as mensagens continuam guardadas na fila do RabbitMQ até alguém
-# consumir de verdade.
 @app.on_event("startup")
 def iniciar_consumidor_continuo():
     thread = threading.Thread(target=consumidor_continuo.rodar_para_sempre, daemon=True)
@@ -93,10 +79,6 @@ def status():
     return {"status": "ok", "servico": "Radar Backend"}
 
 
-# ================================================================
-# Endpoints de sistema — protegidos por chave fixa (X-API-Key)
-# ================================================================
-
 @app.post("/executar/lembrete-diario", dependencies=[Depends(verificar_chave_sistema)])
 def executar_lembrete_manual():
     return lembrete_diario.rodar()
@@ -114,34 +96,17 @@ def executar_enviar_pesquisa_manual():
 
 @app.post("/executar/encerrar-automatico", dependencies=[Depends(verificar_chave_sistema)])
 def executar_encerrar_automatico_manual(background_tasks: BackgroundTasks):
-    # Chama o Gemini + PLN, pode levar bem mais que 30s com várias
-    # pesquisas de uma vez -- alguns serviços de cron gratuito têm
-    # tempo limite curto e não configurável (ex: cron-job.org, 30s
-    # fixo). Responde rápido aqui, processa de verdade depois, em
-    # segundo plano -- o cron não fica esperando o trabalho pesado.
     background_tasks.add_task(encerrar_automatico.rodar)
     return {"status": "processamento iniciado em segundo plano"}
 
 
 @app.post("/executar/processar-fila-convites", dependencies=[Depends(verificar_chave_sistema)])
 def executar_processar_fila_convites():
-    # Consumidor da fila do RabbitMQ (ver workers/consumidor_convites.py).
-    # Drena um lote e responde -- pensado pra ser chamado por um cron
-    # externo a cada poucos minutos (mesmo esquema do cron-job.org que
-    # já mantém o backend acordado), não pra ficar escutando pra sempre
-    # (Render free não tem processo persistente de graça). Roda direto
-    # aqui, sem BackgroundTasks: um lote de 50 mensagens é rápido, e
-    # devolver o resultado (quantas enviadas/reencaminhadas/mortas) é
-    # útil pra acompanhar no painel do cron-job.org.
     return consumidor_convites.processar_lote()
 
 
 @app.post("/executar/monitorar-dlq", dependencies=[Depends(verificar_chave_sistema)])
 def executar_monitorar_dlq():
-    # Boas práticas de integridade (Etapa 5): confere a fila morta
-    # (fila.enviar_convite.dlq) e alerta a equipe por e-mail se houver
-    # mensagem parada -- ver jobs/monitorar_dlq.py. Sugestão de cron
-    # externo: a cada 10-15 minutos.
     return monitorar_dlq.rodar()
 
 
@@ -154,10 +119,6 @@ def rota_notificar_critico(payload: NotificarCriticoPayload):
 def rota_notificar_lead(payload: NotificarLeadPayload):
     return notificar_lead.processar(payload.model_dump(mode="json"))
 
-
-# ================================================================
-# Endpoint chamado pelo RH logado — protegido por JWT do Supabase
-# ================================================================
 
 def _buscar_um(query):
     """
@@ -179,15 +140,6 @@ def rota_encerrar_pesquisa(
 ):
     dados = payload.model_dump(mode="json")
 
-    # Checagens de autorização continuam síncronas (são rápidas) --
-    # só o processamento pesado (indicadores, ML, chamada ao Gemini)
-    # vai pra segundo plano. Antes essa rota travava a requisição até
-    # tudo terminar (pode passar de 30s, às vezes bem mais); se o RH
-    # trocasse de tela do app antes disso, a resposta de sucesso/erro
-    # nunca aparecia pra ele -- e como o proxy na frente do Render
-    # também pode cortar a conexão numa chamada tão longa, no fim
-    # parecia que "não tinha acontecido nada". Mesmo padrão que já é
-    # usado em /executar/encerrar-automatico.
     ciclo = _buscar_um(supabase.table("ciclo").select("empresa_id").eq("id", dados["ciclo_id"]).maybe_single())
     if not ciclo:
         raise HTTPException(404, "Ciclo não encontrado.")
@@ -200,13 +152,6 @@ def rota_encerrar_pesquisa(
 
 @app.post("/pesquisa/{pesquisa_id}/enviar", status_code=202)
 def rota_enviar_pesquisa_agora(pesquisa_id: str, background_tasks: BackgroundTasks, auth: dict = Depends(verificar_jwt_supabase)):
-    # 202 Accepted de verdade (Etapa 2.a/2.c): o Passo 1 (criar token +
-    # item, agora em lote -- ver preparar_lote) roda aqui na hora, rápido
-    # o bastante pra não travar a resposta; o Passo 2 (publicar no
-    # RabbitMQ, que pode demorar se precisar reconectar/retentar) vai pro
-    # BackgroundTasks. Ninguém espera nenhum e-mail ser processado pra
-    # receber essa resposta. O RH consulta o progresso depois em
-    # GET /pesquisa/lote/{lote_id}/status.
     pesquisa = _buscar_um(
         supabase.table("pesquisa").select("id, nome, ciclo_id, prazo_horas, status").eq("id", pesquisa_id).maybe_single()
     )
@@ -221,10 +166,6 @@ def rota_enviar_pesquisa_agora(pesquisa_id: str, background_tasks: BackgroundTas
 
     verificar_rh_pertence_a_empresa(auth["sub"], ciclo["empresa_id"])
 
-    # preparar_lote olha só "esse funcionário já tem token?", nunca o
-    # status da pesquisa -- por isso funciona igual numa "agendada" com
-    # gente pra trás ou numa "enviada" que ficou incompleta (não existe
-    # mais bloqueio por status aqui, só pra "encerrada" acima).
     preparo = enviar_pesquisa.preparar_lote(pesquisa)
     if not preparo["fila_de_envio"]:
         return {
@@ -277,9 +218,6 @@ def rota_status_lote(lote_id: str, auth: dict = Depends(verificar_jwt_supabase))
         "lote_id": lote_id,
         "total": len(itens),
         "contagem": contagem,
-        # "concluido" olha só pra fila de envio (pendente == 0) -- não
-        # espera confirmação de entrega/bounce do webhook, que pode
-        # demorar minutos e não deveria travar a barra de progresso.
         "concluido": contagem["pendente"] == 0,
     }
 
@@ -322,10 +260,6 @@ async def rota_webhook_brevo(chave: str, request: Request):
 
     return {"status": "ok"}
 
-
-# ================================================================
-# Rota de administração — só você, nunca RH de cliente
-# ================================================================
 
 @app.post("/admin/provisionar-empresa")
 def rota_provisionar_empresa(payload: ProvisionarEmpresaPayload, _admin: dict = Depends(verificar_admin)):

@@ -14,16 +14,6 @@ from collections import defaultdict, Counter
 
 from clients.supabase_client import com_nova_tentativa, supabase
 
-# ATENÇÃO: os imports de ml.* e do cliente Gemini ficam de propósito
-# FORA do topo do arquivo (ver dentro de processar()). São eles que
-# puxam scikit-learn + pandas + numpy + o joblib de ~2.7MB do KNN --
-# se ficarem aqui, esse custo é pago sempre que o processo sobe,
-# inclusive só pra responder "/" (o healthcheck que o cron externo
-# usa pra manter o Render acordado). Em cold start no plano free do
-# Render isso pode ser a diferença entre acordar a tempo ou o Render
-# desistir e devolver x-render-routing: hibernate-wake-error. Como
-# só o /encerrar-pesquisa usa isso, o import fica lá, sob demanda.
-
 
 LIMITE_INDICADOR_BAIXO = 2.5
 LIMITE_QUEDA_BRUSCA = 0.5
@@ -31,10 +21,6 @@ MINIMO_RESPOSTAS_POR_INDICADOR = 5
 
 
 def processar(payload: dict) -> dict:
-    # Import pesado feito aqui (na primeira chamada), não no boot do
-    # processo -- ver nota acima. 'global' garante que as funções
-    # auxiliares abaixo (ex: _avaliar_qualidade_respostas) continuem
-    # enxergando esses nomes normalmente depois da primeira chamada.
     global avaliar_qualidade, resumo_qualidade_ciclo, classificar_comentario
     global analisar_comentario, classificar_por_knn, avaliar_indice, analisar_ciclo
     from clients.gemini_client import analisar_ciclo
@@ -47,15 +33,6 @@ def processar(payload: dict) -> dict:
     pesquisa_id = payload["pesquisa_id"]
     ciclo_id = payload["ciclo_id"]
 
-    # Proteção contra reprocessamento: agora que essa função roda em
-    # segundo plano (ver rota_encerrar_pesquisa em main.py), a resposta
-    # HTTP volta antes de terminar -- então clicar de novo (ex: achando
-    # que "não aconteceu nada" por causa da demora) é bem mais fácil de
-    # acontecer. Sem isso, cada chamada duplicada gerava indicadores,
-    # alertas e relatório de IA duplicados (tudo é INSERT, nunca upsert).
-    # Não cobre 100% (duas chamadas na mesma fração de segundo ainda
-    # passam as duas), mas cobre o caso comum de clicar de novo minutos
-    # depois.
     pesquisa_atual = supabase.table("pesquisa").select("status").eq("id", pesquisa_id).maybe_single().execute()
     status_atual = pesquisa_atual.data.get("status") if pesquisa_atual and pesquisa_atual.data else None
     if status_atual is not None and status_atual != "enviada":
@@ -71,22 +48,18 @@ def processar(payload: dict) -> dict:
     empresa_id = ciclo["empresa_id"]
 
     respostas = _buscar_respostas(pesquisa_id)
-    tokens_info = _buscar_info_tokens(pesquisa_id)  # token_id -> {funcionario_id, setor_id, tempo_segundos}
+    tokens_info = _buscar_info_tokens(pesquisa_id)
 
-    # ---- 1. Indicadores por categoria (empresa inteira) ----
     indicadores_empresa = _calcular_indicadores(respostas, agrupar_por_setor=False)
     _salvar_indicadores(ciclo_id, indicadores_empresa, setor_id=None)
 
-    # ---- 2. Indicadores por categoria, quebrado por setor ----
     indicadores_por_setor = _calcular_indicadores_por_setor(respostas, tokens_info)
     for setor_id, indicadores in indicadores_por_setor.items():
         _salvar_indicadores(ciclo_id, indicadores, setor_id=setor_id)
 
-    # ---- 3. Checagem de qualidade de resposta ----
     avaliacoes_qualidade = _avaliar_qualidade_respostas(respostas, tokens_info)
     resumo_qualidade = resumo_qualidade_ciclo(avaliacoes_qualidade)
 
-    # ---- 4. Classificação dos comentários abertos (risco grave + sentimento/tema) ----
     comentarios = [r["valor_texto"] for r in respostas if r.get("valor_texto")]
     classificacoes_comentarios = [classificar_comentario(c) for c in comentarios]
     prioridade_ml = _prioridade_mais_severa(classificacoes_comentarios)
@@ -95,12 +68,11 @@ def processar(payload: dict) -> dict:
     resumo_sentimento = _resumir_sentimento(analises_texto)
     temas_comentarios = _resumir_temas(analises_texto)
 
-    # ---- 5. Comparação com ciclo anterior (queda brusca) ----
     ciclo_anterior = _buscar_ciclo_anterior(empresa_id, ciclo_id)
     alertas_criados = []
     for ind in indicadores_empresa:
         if ind["total_respostas"] < MINIMO_RESPOSTAS_POR_INDICADOR:
-            continue  # protege anonimato — não gera alerta com poucos dados
+            continue
 
         if ind["media"] < LIMITE_INDICADOR_BAIXO:
             alertas_criados.append(_criar_alerta(
@@ -120,7 +92,6 @@ def processar(payload: dict) -> dict:
                         f"{ind['media']} em relação ao ciclo anterior (queda de {round(queda, 2)} pontos)."
                     ))
 
-    # ---- 6. Alerta de comentário crítico (PLN) ----
     if prioridade_ml in ("alta", "media"):
         alertas_criados.append(_criar_alerta(
             ciclo_id, None, "comentario_critico",
@@ -128,7 +99,6 @@ def processar(payload: dict) -> dict:
             f"na análise de texto aberto deste ciclo."
         ))
 
-    # ---- 7. Relatório da IA (Gemini) ----
     total_respondentes = len(tokens_info)
     analise_ia = analisar_ciclo(
         indicadores=[{"categoria": i["categoria_nome"], "media": i["media"]} for i in indicadores_empresa],
@@ -136,24 +106,15 @@ def processar(payload: dict) -> dict:
         comentarios=comentarios,
     )
 
-    # Regra de ouro (Documento 3, seção 4): a IA NUNCA decide o score —
-    # ela só interpreta. O número vem de fórmula fixa, documentada e
-    # auditável, calculada aqui, não pedida à IA.
     score_geral = _calcular_score_geral(indicadores_empresa)
 
-    # a IA do Gemini e o classificador PLN local podem discordar sobre
-    # prioridade — sempre vence o mais severo dos dois (o local é
-    # especializado em detectar risco grave, não deve ser subestimado)
     prioridade_final = _mais_severa(analise_ia.get("prioridade", "baixa"), prioridade_ml)
 
-    # ---- 8. Índice preditivo — empresa ----
     historico_empresa = _historico_score_empresa(empresa_id, ciclo_id)
     if score_geral is not None:
         historico_empresa.append(score_geral)
     previsao_empresa = avaliar_indice(historico_empresa)
 
-    # Segunda opinião via KNN (ml/classificador_knn.py) — roda ao lado
-    # da fórmula, nunca decide sozinha. Nível empresa aqui.
     knn_empresa = classificar_por_knn(indicadores_empresa)
 
     relatorio = supabase.table("relatorio_ia").insert({
@@ -172,11 +133,8 @@ def processar(payload: dict) -> dict:
         "confianca_knn": knn_empresa["confianca_knn"] if knn_empresa else None,
     }).execute().data[0]
 
-    # ---- 8b. Aspectos identificados (ABSA) -- 1 linha por aspecto,
-    # ligado à categoria real do banco, não ao nome que a IA devolveu ----
     _salvar_aspectos(ciclo_id, analise_ia.get("aspectos_identificados", []))
 
-    # ---- 9. Índice preditivo — por setor ----
     resultados_setor = {}
     for setor_id, indicadores in indicadores_por_setor.items():
         if not indicadores:
@@ -200,7 +158,6 @@ def processar(payload: dict) -> dict:
         }).execute()
         resultados_setor[setor_id] = previsao_setor
 
-    # ---- 10. Marca a pesquisa como encerrada (faltava — bug real corrigido) ----
     supabase.table("pesquisa").update({
         "status": "encerrada",
         "encerrada_em": datetime.now(timezone.utc).isoformat(),
@@ -218,10 +175,6 @@ def processar(payload: dict) -> dict:
         "previsao_por_setor": resultados_setor,
     }
 
-
-# ================================================================
-# Funções auxiliares
-# ================================================================
 
 def _calcular_score_geral(indicadores: list[dict]) -> float | None:
     """
@@ -309,7 +262,7 @@ def _calcular_indicadores_por_setor(respostas: list[dict], tokens_info: dict) ->
 def _salvar_indicadores(ciclo_id: str, indicadores: list[dict], setor_id: str | None) -> None:
     for ind in indicadores:
         if ind["total_respostas"] < MINIMO_RESPOSTAS_POR_INDICADOR:
-            continue  # protege anonimato — não salva indicador com poucos dados
+            continue
         supabase.table("indicador").insert({
             "ciclo_id": ciclo_id,
             "categoria_id": ind["categoria_id"],
@@ -339,7 +292,6 @@ def _resumir_sentimento(analises: list[dict]) -> str | None:
         return None
     contagem = Counter(validos)
     mais_comum, qtd = contagem.most_common(1)[0]
-    # se estiver muito dividido, chama de "misto" em vez de forcar 1 rotulo
     if qtd / len(validos) < 0.5:
         return "misto"
     return mais_comum
@@ -428,9 +380,6 @@ def _salvar_aspectos(ciclo_id: str, aspectos: list[dict]) -> None:
 
 
 def _criar_alerta(ciclo_id: str, categoria_id: str | None, tipo: str, descricao: str) -> dict | None:
-    # Nunca deixa uma falha aqui (ex: gatilho de notificação quebrado)
-    # derrubar o encerramento da pesquisa inteira -- o alerta é
-    # importante, mas não pode ser mais crítico que o resto do processo.
     try:
         return supabase.table("alerta").insert({
             "ciclo_id": ciclo_id,
@@ -444,8 +393,6 @@ def _criar_alerta(ciclo_id: str, categoria_id: str | None, tipo: str, descricao:
 
 
 def _historico_score_empresa(empresa_id: str, ciclo_id_atual: str) -> list[float]:
-    # Usa criado_em, não data_inicio -- esse campo é opcional e a tela
-    # de criar ciclo nunca preenche ele, então fica sempre nulo.
     ciclos = com_nova_tentativa(lambda:
         supabase.table("ciclo")
         .select("id, criado_em")
@@ -472,8 +419,6 @@ def _historico_score_setor(setor_id: str, ciclo_id_atual: str) -> list[float]:
         .neq("ciclo_id", ciclo_id_atual)
         .execute()
     ).data
-    # Filtra linha sem score ou sem data antes de ordenar -- evita
-    # comparar None com None (TypeError em Python)
     linhas_validas = [l for l in linhas if l.get("score") is not None and l.get("ciclo") and l["ciclo"].get("criado_em")]
     linhas_ordenadas = sorted(linhas_validas, key=lambda x: x["ciclo"]["criado_em"])
     return [l["score"] for l in linhas_ordenadas]

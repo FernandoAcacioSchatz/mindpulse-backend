@@ -124,8 +124,8 @@ from config import RABBITMQ_URL, RABBITMQ_URL_CONSUMIDOR, RABBITMQ_URL_PUBLISHER
 
 EXCHANGE = "radar.eventos"
 
-ROUTING_KEY_NORMAL = "email.normal"            # envio inicial da pesquisa
-ROUTING_KEY_PRIORITARIO = "email.prioritario"  # lembretes próximos do prazo
+ROUTING_KEY_NORMAL = "email.normal"
+ROUTING_KEY_PRIORITARIO = "email.prioritario"
 
 FILA_PRINCIPAL = "fila.enviar_convite"
 FILA_RETRY = "fila.enviar_convite.retry"
@@ -133,10 +133,10 @@ FILA_PRIORITARIA = "fila.enviar_convite.prioritaria"
 FILA_RETRY_PRIORITARIA = "fila.enviar_convite.prioritaria.retry"
 FILA_DLQ = "fila.enviar_convite.dlq"
 
-TTL_RETRY_MS = 30_000  # 30s parado na fila de retry antes de voltar pra principal
-MAX_TENTATIVAS = 3  # retry do CONSUMIDOR (reenvio de e-mail) -- ver workers/consumidor_convites.py
+TTL_RETRY_MS = 30_000
+MAX_TENTATIVAS = 3
 
-MAX_TENTATIVAS_PUBLICACAO = 3  # retry do PRODUTOR (confirmar que a mensagem entrou na fila)
+MAX_TENTATIVAS_PUBLICACAO = 3
 ESPERA_ENTRE_TENTATIVAS_S = 0.5
 
 
@@ -178,23 +178,16 @@ def declarar_topologia(canal) -> None:
     """
     canal.exchange_declare(exchange=EXCHANGE, exchange_type="direct", durable=True)
 
-    # Dead-letter automático: uma mensagem rejeitada (nack, requeue=False)
-    # cai direto na fila de retry, sem o consumidor precisar republicar
-    # nada manualmente -- o ack só acontece de verdade após o Brevo
-    # confirmar o envio.
     canal.queue_declare(
         queue=FILA_PRINCIPAL,
         durable=True,
         arguments={
-            "x-dead-letter-exchange": "",  # exchange padrão -- roteia pelo nome da fila
+            "x-dead-letter-exchange": "",
             "x-dead-letter-routing-key": FILA_RETRY,
         },
     )
     canal.queue_bind(queue=FILA_PRINCIPAL, exchange=EXCHANGE, routing_key=ROUTING_KEY_NORMAL)
 
-    # Fila de retry: ninguém consome dela. Ela só "segura" a mensagem
-    # por TTL_RETRY_MS e depois ela mesma expira e é dead-lettered de
-    # volta pro exchange principal, reaparecendo na fila principal.
     canal.queue_declare(
         queue=FILA_RETRY,
         durable=True,
@@ -205,11 +198,6 @@ def declarar_topologia(canal) -> None:
         },
     )
 
-    # Fila de prioridade (Etapa 2.b): mesmo esquema de dead-letter/retry
-    # da fila principal, só que na routing key email.prioritario. Hoje
-    # usada pelos lembretes (jobs/lembrete_diario.py e
-    # lembrete_segundo.py) -- o consumidor sempre confere essa fila
-    # ANTES da fila principal (ver workers/consumidor_continuo.py).
     canal.queue_declare(
         queue=FILA_PRIORITARIA,
         durable=True,
@@ -272,31 +260,10 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
     resultados = [False] * len(mensagens)
     conexao = None
 
-    # Conectar fica FORA do loop de mensagens e em try/except próprio, de
-    # propósito: se isso falhar (broker fora do ar, credencial sem
-    # permissão, etc.), NENHUMA mensagem foi publicada -- e antes essa
-    # exceção escapava sem ser tratada, pulando direto pra fora da função.
-    # Quem chama (jobs/enviar_pesquisa.py) só desfaz o token de um
-    # funcionário quando `publicar_mensagens` DEVOLVE False pra ele -- uma
-    # exceção não devolve nada, então os tokens já criados no Passo 1
-    # ficavam órfãos pra sempre (a checagem de idempotência olha só "existe
-    # token?", não "foi enfileirado de verdade?"). Bug real observado: a
-    # troca do tipo do exchange quebrou bem aqui, e 100 tokens + itens de
-    # lote ficaram travados em "pendente", enquanto a pesquisa foi marcada
-    # "enviada" na tentativa seguinte (sem sobrar nenhuma "falha" pra
-    # reportar, já que não havia mais ninguém pra tentar enviar -- todos
-    # "já tinham token").
-    #
-    # NÃO chama mais declarar_topologia() aqui (Etapa 3 -- autorização):
-    # a credencial de publicador não tem permissão "configure", só "write"
-    # na exchange. A topologia já precisa existir de antes, criada pelo
-    # script de provisionamento com a credencial admin. Se a exchange não
-    # existir ainda, o publish abaixo falha com um erro claro do broker
-    # (404 NOT_FOUND), pego pelo mesmo retry/except de sempre.
     try:
         conexao = conectar_publicador()
         canal = conexao.channel()
-        canal.confirm_delivery()  # publisher confirms: garante que o broker recebeu antes de seguir
+        canal.confirm_delivery()
     except Exception as e:
         print(f"[rabbitmq_client] Não foi possível conectar como publicador -- lote inteiro falhou ({len(mensagens)} mensagens): {e}")
         try:
@@ -304,7 +271,7 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
                 conexao.close()
         except Exception:
             pass
-        return resultados  # tudo False -- quem chamou desfaz os tokens de todo mundo
+        return resultados
 
     try:
         for i, mensagem in enumerate(mensagens):
@@ -320,9 +287,6 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
                         properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
                         mandatory=True,
                     )
-                    # Chegou até aqui sem exceção -- o broker confirmou o
-                    # recebimento (ver nota no docstring do módulo: basic_publish
-                    # nunca devolve True/False com confirm_delivery() ativo).
                     publicado = True
                 except (pika.exceptions.UnroutableError, pika.exceptions.NackError) as e:
                     print(f"[rabbitmq_client] Broker recusou a mensagem (tentativa {tentativa}/{MAX_TENTATIVAS_PUBLICACAO}): {e}")
@@ -335,12 +299,6 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
                     break
 
                 if tentativa < MAX_TENTATIVAS_PUBLICACAO:
-                    # Falha real (exceção) -- reabre a conexão do zero antes
-                    # de tentar de novo, caso o problema seja a conexão/canal, não
-                    # só a mensagem específica. Essa reconexão TAMBÉM pode
-                    # falhar (mesma classe de problema do bloco de cima) -- por isso
-                    # também fica protegida, em vez de deixar escapar e perder o
-                    # resultado das mensagens já processadas.
                     print(f"[rabbitmq_client] Falha ao publicar, tentativa {tentativa}/{MAX_TENTATIVAS_PUBLICACAO}, reconectando...")
                     try:
                         conexao.close()
@@ -360,10 +318,6 @@ def publicar_mensagens(mensagens: list[dict], routing_key: str = ROUTING_KEY_NOR
                 print(f"[rabbitmq_client] Desisti de publicar após {MAX_TENTATIVAS_PUBLICACAO} tentativas: {mensagem}")
 
             if conexao is None:
-                # Reconexão quebrou de vez -- sem canal não dá pra publicar o
-                # resto do lote. As mensagens restantes já começam como False
-                # (valor inicial de `resultados`), então basta parar aqui;
-                # quem chamou desfaz o token de todo mundo que sobrou.
                 restantes = len(mensagens) - i - 1
                 if restantes > 0:
                     print(f"[rabbitmq_client] Conexão perdida -- interrompendo o lote, {restantes} mensagem(ns) restante(s) ficam como falha.")

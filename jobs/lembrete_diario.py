@@ -43,8 +43,6 @@ def rodar() -> dict:
 
     pendentes = []
     for token in tokens:
-        # Pesquisa já encerrada (por qualquer motivo) -- não faz
-        # sentido lembrar de responder algo que já foi analisado.
         if not token.get("pesquisa") or token["pesquisa"]["status"] != "enviada":
             continue
 
@@ -60,7 +58,6 @@ def rodar() -> dict:
         print(f"[lembrete_diario] {resultado}")
         return resultado
 
-    # Busca os funcionários em lote (1 SELECT), não 1 por token.
     funcionarios = (
         supabase.table("funcionario")
         .select("id, nome, email")

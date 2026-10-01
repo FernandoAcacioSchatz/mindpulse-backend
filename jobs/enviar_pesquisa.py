@@ -36,12 +36,6 @@ from clients.rabbitmq_client import publicar_mensagens
 
 
 def rodar() -> dict:
-    # Pega "agendada" (nunca enviada) e "enviada" (já despachada, mas
-    # pode ter gente sem token ainda -- funcionário novo, ou convite que
-    # falhou numa execução anterior) -- preparar_lote não usa o status
-    # pra decidir quem falta, só se aquele funcionário já tem token, e
-    # devolve fila vazia sozinho quando não sobrou ninguém, então incluir
-    # "enviada" aqui não duplica nem reprocessa quem já foi.
     pesquisas = (
         supabase.table("pesquisa")
         .select("id, nome, ciclo_id, prazo_horas, status")
@@ -145,9 +139,6 @@ def preparar_lote(pesquisa: dict) -> dict:
             .data
         )
     except Exception:
-        # Os itens de status não foram criados -- desfaz os tokens do
-        # lote inteiro (mesmo raciocínio de antes: token e item andam
-        # sempre juntos, nunca um sem o outro).
         supabase.table("token_resposta").delete().in_("id", [t["id"] for t in tokens_novos]).execute()
         raise
     item_por_funcionario = {i["funcionario_id"]: i for i in itens_novos}
@@ -191,24 +182,11 @@ def publicar_e_finalizar(preparo: dict) -> dict:
     if not fila_de_envio:
         return {**preparo, "falhas_ao_enfileirar": []}
 
-    resultados = publicar_mensagens(preparo["mensagens"])  # routing_key default = envio inicial (normal)
+    resultados = publicar_mensagens(preparo["mensagens"])
 
     falhas = []
     for (funcionario, token, envio_item), sucesso in zip(fila_de_envio, resultados):
         if not sucesso:
-            # A confirmação de publicação pode reportar falha por engano
-            # (rede lenta, disputa de recursos no Render, etc.) mesmo
-            # quando a mensagem já chegou na fila e foi processada de
-            # verdade pelo consumidor -- visto na prática em teste real
-            # (log de 29/09: 100 "falhas" reportadas aqui, mas o
-            # consumidor já tinha processado praticamente todas).
-            #
-            # Por isso só desfaz o convite se ele ainda estiver
-            # "pendente" NESSE EXATO INSTANTE -- e essa checagem vai
-            # dentro do próprio DELETE (condição no WHERE), não como um
-            # SELECT separado antes, pra não abrir brecha pro consumidor
-            # processar o item bem no meio do caminho entre "conferir" e
-            # "apagar".
             item_apagado = (
                 supabase.table("envio_lote_item")
                 .delete()
@@ -225,11 +203,6 @@ def publicar_e_finalizar(preparo: dict) -> dict:
             falhas.append(funcionario["email"])
             print(f"[enviar_pesquisa] Convite pra {funcionario['email']} falhou após retentativas -- token e item de status desfeitos, será tentado de novo na próxima execução.")
 
-    # "enviada" significa "essa pesquisa já teve pelo menos um lote
-    # despachado com sucesso" -- nunca regride pra "agendada" numa
-    # reexecução (reenviar depois de já ter enviado não deve resetar o
-    # prazo de resposta). Só sobe de "agendada" pra "enviada" quando o
-    # lote atual fechou sem nenhuma falha.
     sucesso_total = not falhas
     if sucesso_total and preparo["pesquisa"].get("status") != "enviada":
         supabase.table("pesquisa").update(

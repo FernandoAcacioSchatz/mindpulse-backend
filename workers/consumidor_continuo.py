@@ -49,7 +49,7 @@ from clients.supabase_client import supabase
 from config import BASE_URL_FRONTEND
 
 ESPERA_APOS_QUEDA_S = 5
-ESPERA_SEM_MENSAGEM_S = 1  # nenhuma das duas filas tinha mensagem -- espera um pouco antes de checar de novo
+ESPERA_SEM_MENSAGEM_S = 1
 
 CAMPO_ENVIADO_POR_TIPO = {
     "convite": "convite_enviado_em",
@@ -71,8 +71,6 @@ def _montar_email_convite(msg: dict) -> tuple[str, str]:
 
 
 def _montar_email_lembrete(msg: dict, numero: int) -> tuple[str, str]:
-    # Horas restantes calculadas AGORA (na hora de mandar), não quando o
-    # lembrete foi decidido -- mais preciso, já que passou pela fila.
     agora = datetime.now(timezone.utc)
     expira = datetime.fromisoformat(msg["expira_em"])
     horas_restantes = max(0, round((expira - agora).total_seconds() / 3600))
@@ -116,7 +114,6 @@ def _marcar_enviado(token_id: str, tipo: str) -> None:
 
 
 def _atualizar_status_item(envio_item_id: str | None, status: str, mensagem_id_brevo: str = None, erro: str = None) -> None:
-    # Só existe pra convites -- lembretes não têm item de lote associado.
     if not envio_item_id:
         return
     dados = {"status": status, "atualizado_em": datetime.now(timezone.utc).isoformat()}
@@ -129,7 +126,7 @@ def _atualizar_status_item(envio_item_id: str | None, status: str, mensagem_id_b
 
 def _processar_mensagem(canal, metodo, propriedades, corpo: bytes, fila_de_origem: str) -> None:
     msg = json.loads(corpo)
-    tipo = msg.get("tipo", "convite")  # mensagem antiga (sem "tipo") = convite
+    tipo = msg.get("tipo", "convite")
     token_id = msg.get("token_id")
     envio_item_id = msg.get("envio_item_id")
 
@@ -185,8 +182,6 @@ def rodar_para_sempre() -> None:
             print("[consumidor_continuo] Conectado, esperando mensagens...")
 
             while True:
-                # Prioridade sempre primeiro: só olha pra fila principal
-                # se a de prioridade estiver vazia nesse instante.
                 metodo, propriedades, corpo = canal.basic_get(queue=FILA_PRIORITARIA, auto_ack=False)
                 fila_de_origem = FILA_PRIORITARIA
 
@@ -195,9 +190,6 @@ def rodar_para_sempre() -> None:
                     fila_de_origem = FILA_PRINCIPAL
 
                 if metodo is None:
-                    # As duas filas estavam vazias -- espera processando
-                    # eventos da conexão (heartbeat incluso), em vez de um
-                    # time.sleep() puro que deixaria a conexão "surda".
                     conexao.sleep(ESPERA_SEM_MENSAGEM_S)
                     continue
 

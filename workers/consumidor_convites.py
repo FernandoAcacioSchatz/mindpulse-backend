@@ -76,7 +76,7 @@ def _marcar_enviado(token_id: str) -> None:
 
 def _atualizar_status_item(envio_item_id: str | None, status: str, mensagem_id_brevo: str = None, erro: str = None) -> None:
     if not envio_item_id:
-        return  # mensagem antiga, sem esse campo -- não quebra, só não atualiza status por lote
+        return
     dados = {"status": status, "atualizado_em": datetime.now(timezone.utc).isoformat()}
     if mensagem_id_brevo is not None:
         dados["mensagem_id_brevo"] = mensagem_id_brevo
@@ -96,7 +96,7 @@ def processar_lote(max_mensagens: int = 50) -> dict:
         while processadas < max_mensagens:
             metodo, propriedades, corpo = canal.basic_get(queue=FILA_PRINCIPAL, auto_ack=False)
             if metodo is None:
-                break  # fila vazia por enquanto -- nada mais a fazer nessa chamada
+                break
 
             processadas += 1
             msg = json.loads(corpo)
@@ -104,8 +104,6 @@ def processar_lote(max_mensagens: int = 50) -> dict:
             envio_item_id = msg.get("envio_item_id")
 
             if token_id and _ja_enviado(token_id):
-                # Idempotência: essa mensagem já foi processada com sucesso
-                # antes (entrega duplicada) -- confirma sem reenviar.
                 canal.basic_ack(delivery_tag=metodo.delivery_tag)
                 duplicadas += 1
                 print(f"[consumidor_convites] {msg.get('funcionario_email')} já tinha sido enviado -- ignorando duplicata.")
@@ -124,17 +122,12 @@ def processar_lote(max_mensagens: int = 50) -> dict:
                     _marcar_enviado(token_id)
                 _atualizar_status_item(envio_item_id, "enviado", mensagem_id_brevo=resposta_brevo.get("messageId"))
 
-                # Só agora, com a confirmação real do Brevo, a mensagem sai da fila.
                 canal.basic_ack(delivery_tag=metodo.delivery_tag)
                 sucesso += 1
             except Exception as e:
                 tentativa_atual = tentativas_anteriores(propriedades) + 1
 
                 if tentativa_atual >= MAX_TENTATIVAS:
-                    # Esgotou as tentativas -- move manualmente pra DLQ
-                    # (preserva o corpo e os headers originais, incluindo o
-                    # histórico de x-death, útil pra investigar depois) e
-                    # só aí confirma a saída da fila principal.
                     canal.basic_publish(
                         exchange="",
                         routing_key=FILA_DLQ,
@@ -146,9 +139,6 @@ def processar_lote(max_mensagens: int = 50) -> dict:
                     mortas += 1
                     print(f"[consumidor_convites] {msg.get('funcionario_email')} -> DLQ após {tentativa_atual} tentativas: {e}")
                 else:
-                    # NÃO dá ack -- nack(requeue=False) aciona o
-                    # dead-letter-exchange da própria fila principal, que
-                    # manda pra fila de retry sozinho (ver rabbitmq_client.py).
                     canal.basic_nack(delivery_tag=metodo.delivery_tag, requeue=False)
                     reencaminhadas += 1
                     print(f"[consumidor_convites] {msg.get('funcionario_email')} -> retry (tentativa {tentativa_atual}): {e}")

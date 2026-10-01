@@ -79,9 +79,6 @@ def publicar_mensagem_quebrada() -> None:
     mensagem = {
         "tipo": "convite",
         "teste_dlq": True,
-        # De propósito SEM funcionario_nome / funcionario_email /
-        # token_codigo / prazo_horas -- qualquer consumidor real que
-        # tentar montar o e-mail a partir disso estoura KeyError.
     }
     corpo = json.dumps(mensagem).encode("utf-8")
 
@@ -99,8 +96,6 @@ def publicar_mensagem_quebrada() -> None:
                 properties=pika.BasicProperties(content_type="application/json", delivery_mode=2),
                 mandatory=True,
             )
-            # Chegou até aqui sem exceção -- o broker confirmou o
-            # recebimento (ver nota no docstring do módulo).
             publicado = True
         except (pika.exceptions.UnroutableError, pika.exceptions.NackError) as e:
             print(f"[teste_falha_dlq] Broker recusou a mensagem (tentativa {tentativa}/{MAX_TENTATIVAS}): {e}")
