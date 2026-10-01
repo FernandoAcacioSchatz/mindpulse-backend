@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+
+*.md
+
 # Python
 __pycache__/
 *.pyc
