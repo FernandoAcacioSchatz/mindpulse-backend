@@ -1,14 +1,3 @@
-"""
-Equivalente ao workflow n8n 'Encerrar Pesquisa e Gerar Relatorio IA' —
-migração completa, com as peças novas que não existiam no n8n:
-
-1. Checagem de qualidade de resposta (ml/qualidade_resposta.py)
-2. Classificador de risco grave / PLN (ml/classificador_comentarios.py)
-3. Análise de sentimento + tema dos comentários (ml/analise_texto.py)
-4. Índice preditivo por setor e por empresa (ml/indice_preditivo.py)
-
-Recebe: { "pesquisa_id": ..., "ciclo_id": ... }
-"""
 from datetime import datetime, timezone
 from collections import defaultdict, Counter
 
@@ -177,11 +166,6 @@ def processar(payload: dict) -> dict:
 
 
 def _calcular_score_geral(indicadores: list[dict]) -> float | None:
-    """
-    Fórmula documentada no Documento 3, seção 4 — a única fonte de
-    verdade do score geral. Nunca pedimos esse número à IA.
-    Escala 1-5 (média das categorias) convertida para 0-10.
-    """
     if not indicadores:
         return None
     media = sum(i["media"] for i in indicadores) / len(indicadores)
@@ -286,7 +270,6 @@ def _avaliar_qualidade_respostas(respostas: list[dict], tokens_info: dict) -> li
 
 
 def _resumir_sentimento(analises: list[dict]) -> str | None:
-    """Sentimento predominante entre os comentarios do ciclo."""
     validos = [a["sentimento"] for a in analises if a.get("tem_conteudo")]
     if not validos:
         return None
@@ -298,7 +281,6 @@ def _resumir_sentimento(analises: list[dict]) -> str | None:
 
 
 def _resumir_temas(analises: list[dict]) -> dict:
-    """Quantos comentarios (com confianca razoavel) cairam em cada tema."""
     validos = [a for a in analises if a.get("tem_conteudo") and a.get("tema_confianca", 0) >= 0.4]
     contagem = Counter(a["tema_categoria"] for a in validos)
     return dict(contagem)
@@ -347,15 +329,6 @@ def _media_anterior_da_categoria(ciclo_anterior_id: str, categoria_id: str) -> f
 
 
 def _salvar_aspectos(ciclo_id: str, aspectos: list[dict]) -> None:
-    """
-    Grava cada aspecto (categoria + polaridade + evidência) devolvido
-    pelo Gemini via ABSA. A IA manda o NOME da categoria (mesmo texto
-    já cadastrado em `categoria`, ver gemini_client.py) -- aqui a
-    gente resolve pro categoria_id de verdade antes de salvar, e
-    ignora silenciosamente qualquer nome que não bata (nunca deveria
-    acontecer, dado que o schema já restringe as opções, mas não
-    trava o encerramento da pesquisa por causa disso).
-    """
     if not aspectos:
         return
 

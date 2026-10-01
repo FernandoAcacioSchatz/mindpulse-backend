@@ -1,17 +1,3 @@
-"""
-Segundo (e último) lembrete da cascata: dispara 3h depois do
-PRIMEIRO lembrete, só pra quem ainda não respondeu e ainda não
-recebeu esse segundo aviso.
-
-Roda todo dia às 11h (3h depois do primeiro lembrete, às 8h).
-Também pode ser disparado manualmente via POST /executar/lembrete-segundo.
-
-Migrado pra mensageria (Etapa 2.b): mesmo raciocínio do
-lembrete_diario.py -- esse job só decide quem precisa do segundo
-lembrete e publica na fila de prioridade (email.prioritario); quem
-manda o e-mail de verdade e marca lembrete2_enviado_em é o
-consumidor (workers/consumidor_continuo.py).
-"""
 from datetime import datetime, timezone
 
 from clients.supabase_client import supabase

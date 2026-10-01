@@ -1,25 +1,3 @@
-"""
-Primeiro lembrete da cascata: dispara 24h depois do convite inicial,
-só pra quem ainda não respondeu e ainda não recebeu esse lembrete.
-
-Roda todo dia às 8h. Também pode ser disparado manualmente via
-POST /executar/lembrete-diario.
-
-Migrado pra mensageria (Etapa 2.b do trabalho): em vez de mandar o
-e-mail direto por aqui, esse job só DECIDE quem precisa de lembrete e
-publica 1 mensagem por pessoa na fila de prioridade (routing key
-email.prioritario) -- quem manda o e-mail de verdade é o mesmo
-consumidor que processa os convites (workers/consumidor_continuo.py),
-só que essa fila é sempre conferida primeiro, antes da fila normal.
-
-Por isso o campo lembrete1_enviado_em só é marcado pelo CONSUMIDOR,
-depois que o Brevo confirma o envio -- nunca aqui. Se a publicação
-falhar, o token simplesmente continua sem o campo marcado e é
-tentado de novo na próxima execução (mesmo raciocínio de idempotência
-de jobs/enviar_pesquisa.py, só que mais simples: aqui não existe
-token nem item pra desfazer, só um campo que fica em branco até dar
-certo).
-"""
 from datetime import datetime, timezone
 
 from clients.supabase_client import supabase

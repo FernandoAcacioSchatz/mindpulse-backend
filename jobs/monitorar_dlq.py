@@ -1,47 +1,9 @@
-"""
-Monitoramento da fila morta (Etapa 5 do trabalho de Sistemas
-Distribuídos -- boas práticas de integridade na troca de mensagens).
-
-Antes deste job, uma mensagem que esgotava as tentativas e caía em
-fila.enviar_convite.dlq ficava parada lá sem ninguém saber -- só se
-alguém entrasse manualmente no painel do CloudAMQP e conferisse. Isso
-é justamente o tipo de falha "silenciosa" que um sistema de mensageria
-em produção não pode ter: convite de pesquisa que nunca chegou, sem
-que ninguém do time percebesse.
-
-O que este job faz: confere quantas mensagens estão paradas na DLQ
-(consulta "passiva" -- só lê o contador, não consome nem apaga nada) e,
-se houver pelo menos uma, dispara um e-mail de alerta pra equipe
-(config.ADMIN_EMAILS) via Brevo, com a contagem e o nome da fila.
-
-Chamado por HTTP (POST /executar/monitorar-dlq, protegido por
-X-API-Key), no mesmo esquema de cron externo dos outros jobs
-(cron-job.org) -- sugestão: a cada 10-15 minutos.
-
-Simplificação deliberada (documentada, não escondida): o alerta dispara
-TODA VEZ que o job roda e a DLQ não está vazia, sem "cooldown" -- ou
-seja, enquanto ninguém tratar as mensagens mortas, a equipe recebe um
-e-mail a cada execução do cron. Suficiente pro escopo do trabalho
-(garante que a falha não passa despercebida); uma evolução natural
-seria guardar em Supabase a hora do último alerta e só reavisar depois
-de um intervalo maior, ou depois que a contagem mudar.
-
-Autorização por papel (Etapa 3): usa RABBITMQ_URL_CONSUMIDOR -- a
-mesma credencial restrita dos workers consumidores, que já tem
-permissão de leitura em fila.* (inclui a DLQ). Não precisa de nenhuma
-credencial nova.
-"""
 from clients.brevo_client import enviar_email
 from clients.rabbitmq_client import FILA_DLQ, conectar_consumidor
 from config import ADMIN_EMAILS
 
 
 def _consultar_profundidade_dlq() -> int:
-    """
-    Passive declare: só CONSULTA a fila (não cria, não altera, não
-    consome nenhuma mensagem) e devolve quantas mensagens estão
-    paradas nela agora.
-    """
     conexao = conectar_consumidor()
     try:
         canal = conexao.channel()

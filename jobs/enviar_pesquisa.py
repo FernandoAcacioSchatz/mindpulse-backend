@@ -1,33 +1,3 @@
-"""
-Equivalente ao workflow n8n 'Enviar Pesquisa (v2 corrigido)' —
-migração completa.
-
-Melhoria em relação à versão n8n: processa TODAS as pesquisas
-agendadas numa execução, não só 1 (era uma limitação conhecida
-do node "limit: 1", documentada no Documento 10).
-
-Idempotente: se rodar 2x por engano, não duplica token nem manda
-e-mail 2x — verifica se o token já existe antes de criar.
-
-Envio de e-mail via RabbitMQ (CloudAMQP), não mais direto por aqui:
-criar token é rápido (banco), mas mandar e-mail é uma chamada de
-rede -- pra uma empresa grande, esperar todo mundo enviar antes de
-responder a requisição tem o mesmo risco que já vimos em
-/encerrar-pesquisa (timeout do proxy na frente do Render). Agora
-esse job só cria os tokens e PUBLICA 1 mensagem por convite na fila
--- quem manda o e-mail de verdade é o worker separado
-(workers/consumidor_convites.py). Ver clients/rabbitmq_client.py
-pra topologia (exchange, filas, retry, DLQ).
-
-Lote (Etapa 2.a/2.c do trabalho de mensageria): cada chamada gera um
-lote_id -- é o "identificador de lote" devolvido na hora, junto com o
-202, pra quem chamou (o RH, pela tela) poder consultar o progresso
-depois (ver rota de status em main.py e envio_lote_item no banco).
-
-IMPORTANTE: no plano gratuito da Brevo existe um teto de 300
-e-mails/dia -- isso não é resolvido por código nenhum, é limite
-de conta. Cliente grande = upgrade de plano na Brevo, não mais fila.
-"""
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -57,20 +27,6 @@ def rodar() -> dict:
 
 
 def preparar_lote(pesquisa: dict) -> dict:
-    """
-    Passo 1 -- cria token + item de status do lote pra quem ainda não
-    tem (idempotência olha só "esse funcionário já tem token pra essa
-    pesquisa?", nunca o status da pesquisa -- por isso funciona tanto
-    pra reenviar uma "agendada" incompleta quanto pra fechar a lacuna
-    de uma "enviada" que ficou com gente pra trás).
-
-    Em lote (1 SELECT pra achar quem já tem token + até 2 INSERTs em
-    lote pros que faltam), em vez de 1 SELECT + até 2 INSERTs POR
-    FUNCIONÁRIO como antes -- pra 100 funcionários isso trocava até
-    ~300 idas ao Supabase em série por só 4, que é o que permite essa
-    etapa ficar rápida o bastante pra rodar de forma síncrona, antes
-    do 202.
-    """
     pesquisa_id = pesquisa["id"]
     prazo_horas = pesquisa.get("prazo_horas") or 24
 
@@ -170,13 +126,6 @@ def preparar_lote(pesquisa: dict) -> dict:
 
 
 def publicar_e_finalizar(preparo: dict) -> dict:
-    """
-    Passo 2 -- publica no RabbitMQ e resolve falha por falha (rollback
-    de token+item de quem não entrou na fila, pra não ficar órfão).
-    Chamada tanto de forma síncrona (pelo cron, em processar_uma_pesquisa)
-    quanto em BackgroundTasks (pela rota manual) -- é a mesma função,
-    só muda quem chama e quando.
-    """
     pesquisa_id = preparo["pesquisa_id"]
     fila_de_envio = preparo["fila_de_envio"]
     if not fila_de_envio:
@@ -215,8 +164,6 @@ def publicar_e_finalizar(preparo: dict) -> dict:
 
 
 def processar_uma_pesquisa(pesquisa: dict) -> dict:
-    """Usada pelo cron (rodar(), abaixo) -- síncrona de ponta a ponta,
-    sem problema porque ninguém fica esperando resposta HTTP dela."""
     preparo = preparar_lote(pesquisa)
     if not preparo["fila_de_envio"]:
         return {

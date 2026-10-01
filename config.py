@@ -1,7 +1,3 @@
-"""
-Configuração central — carrega as variáveis de ambiente uma vez só,
-reaproveitadas em todo o resto do backend.
-"""
 import os
 from dotenv import load_dotenv
 

@@ -1,28 +1,3 @@
-"""
-Radar Backend — ponto de entrada.
-
-Roda localmente com:
-    uvicorn main:app --reload
-
-Gatilhos, espelhando o que existia no n8n:
-- Rotas HTTP (/executar/*, /encerrar-pesquisa, /notificar-*) chamadas
-  externamente — pela tela do RH, por cron externo (cron-job.org),
-  ou pelo Supabase Database Webhook.
-
-O agendador interno (APScheduler) que existia aqui foi removido —
-o Render gratuito "dorme" sem aviso, e um agendador que depende do
-processo estar de pé no segundo exato não é confiável nesse plano.
-Toda a parte de horário (enviar 8h, lembrete 8h30/11h30, encerrar
-10h) agora é responsabilidade do cron-job.org, configurado
-externamente — ver Documento 30. Rodar os dois ao mesmo tempo já
-causou o backend disparando 3h adiantado (tratando "8h" como UTC
-em vez de horário de Brasília) — não reintroduzir sem entender essa
-causa primeiro.
-
-Dois esquemas de segurança (ver clients/auth.py):
-- JWT do Supabase → endpoints chamados por RH logado
-- Chave de sistema → endpoints chamados por automação/webhook
-"""
 import threading
 from datetime import datetime, timezone
 
@@ -121,13 +96,6 @@ def rota_notificar_lead(payload: NotificarLeadPayload):
 
 
 def _buscar_um(query):
-    """
-    Roda uma query .maybe_single() com segurança. Em algumas versões
-    do supabase-py, .execute() devolve None direto quando não acha
-    nenhuma linha, em vez de um objeto de resposta com .data=None —
-    acessar .data nesse caso quebra com AttributeError. Essa função
-    trata os dois comportamentos.
-    """
     resposta = query.execute()
     return resposta.data if resposta else None
 
@@ -186,11 +154,6 @@ def rota_enviar_pesquisa_agora(pesquisa_id: str, background_tasks: BackgroundTas
 
 @app.get("/pesquisa/lote/{lote_id}/status")
 def rota_status_lote(lote_id: str, auth: dict = Depends(verificar_jwt_supabase)):
-    """
-    Consulta de progresso do lote (Etapa 2.c): o frontend chama isso
-    periodicamente (a cada ~2s) depois do 202, até `concluido` virar
-    true, em vez de ficar esperando uma única requisição travada.
-    """
     itens = (
         supabase.table("envio_lote_item")
         .select("status, pesquisa_id")
@@ -224,18 +187,6 @@ def rota_status_lote(lote_id: str, auth: dict = Depends(verificar_jwt_supabase))
 
 @app.post("/webhooks/brevo/{chave}")
 async def rota_webhook_brevo(chave: str, request: Request):
-    """
-    Confirmação de entrega ao destinatário (Etapa 2.c, item 3) -- a
-    Brevo chama isso minutos depois do envio, informando se entregou ou
-    se voltou (bounce). Correlaciona com a linha certa pela tag que
-    mandamos junto no envio (ver clients/brevo_client.py e
-    workers/consumidor_convites.py) -- é o envio_lote_item.id.
-
-    Sem JWT nem X-API-Key (a Brevo não manda nenhum dos dois) -- a
-    própria URL, com essa chave, é a proteção. Configurar a mesma
-    string em BREVO_WEBHOOK_SECRET e no cadastro do webhook no painel
-    da Brevo.
-    """
     if not BREVO_WEBHOOK_SECRET or chave != BREVO_WEBHOOK_SECRET:
         raise HTTPException(401, "Chave de webhook inválida.")
 
@@ -273,43 +224,30 @@ def rota_provisionar_empresa(payload: ProvisionarEmpresaPayload, _admin: dict = 
 
 @app.get("/admin/verificar")
 def rota_verificar_admin(_admin: dict = Depends(verificar_admin)):
-    """Só confirma se quem está logado é da equipe Radar — usado pela
-    tela admin.html antes de mostrar o formulário de cadastro."""
     return {"autorizado": True}
 
 
 @app.get("/admin/leads")
 def rota_listar_leads(_admin: dict = Depends(verificar_admin)):
-    """Mensagens recebidas pelo formulário de contato do site comercial.
-    Passa pelo backend (service_role) porque a tabela 'lead' não tem
-    política de leitura — só de escrita, de propósito (formulário
-    público não deveria conseguir LER contato de outra pessoa)."""
     leads = supabase.table("lead").select("*").order("criado_em", desc=True).execute().data
     return {"leads": leads}
 
 
 @app.patch("/admin/leads/{lead_id}")
 def rota_atualizar_status_lead(lead_id: str, payload: AtualizarStatusLeadPayload, _admin: dict = Depends(verificar_admin)):
-    """Marca (ou desmarca) um lead como visto ou respondido -- sempre
-    grava quem fez isso e quando, usando o e-mail de quem está logado."""
     return admin.atualizar_status_lead(lead_id, payload.campo, payload.marcar, _admin["email"])
 
 
 @app.put("/admin/leads/{lead_id}/observacoes")
 def rota_salvar_observacao_lead(lead_id: str, payload: SalvarObservacaoLeadPayload, _admin: dict = Depends(verificar_admin)):
-    """Anotação livre sobre o lead."""
     return admin.salvar_observacao_lead(lead_id, payload.observacoes)
 
 
 @app.get("/admin/empresas")
 def rota_listar_empresas(_admin: dict = Depends(verificar_admin)):
-    """Visão operacional de todas as empresas -- funcionários, ciclos,
-    status do ciclo mais recente. Nunca devolve score/indicador."""
     return {"empresas": admin.listar_empresas()}
 
 
 @app.get("/admin/empresas/{empresa_id}")
 def rota_detalhar_empresa(empresa_id: str, _admin: dict = Depends(verificar_admin)):
-    """Linha do tempo de ciclos de 1 empresa -- status e taxa de
-    resposta de cada um. Nunca devolve score/indicador."""
     return admin.detalhar_empresa(empresa_id)

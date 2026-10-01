@@ -1,34 +1,3 @@
-"""
-Consumidor dos convites de pesquisa -- lê da fila.enviar_convite,
-manda o e-mail de verdade (Brevo) e trata falha com nack + dead-letter
-automático (ver clients/rabbitmq_client.py pra topologia).
-
-Ack manual conforme Etapa 2.a/2.d do trabalho de Sistemas
-Distribuídos: uma mensagem só sai da fila principal de vez quando o
-Brevo confirma o envio (ack). Se falhar, NUNCA damos ack -- damos
-nack(requeue=False), e é o dead-letter-exchange da própria fila que
-manda a mensagem pra fila de retry sozinho. As tentativas são contadas
-pelo header `x-death` (nativo do RabbitMQ), não por um campo manual no
-corpo da mensagem.
-
-Idempotência (Etapa 2.d): antes de mandar o e-mail, confere se aquele
-token já foi marcado como enviado -- protege contra duplicidade se a
-mesma mensagem for entregue duas vezes (ex: o worker caiu depois de
-mandar o e-mail mas antes de conseguir confirmar o ack).
-
-Roda em modo "drena um lote e sai" (não fica escutando pra sempre):
-o Render free não tem processo persistente de graça, então esse
-worker é chamado por HTTP (POST /executar/processar-fila-convites,
-protegido por X-API-Key) periodicamente por um cron externo. Cada
-chamada processa até `max_mensagens` e devolve; se a fila estiver
-maior que isso, a próxima chamada do cron continua de onde parou.
-
-Autorização por papel (Etapa 3): conecta com RABBITMQ_URL_CONSUMIDOR
-(mesma credencial restrita do consumidor_continuo.py), não mais com a
-credencial admin -- não chama mais declarar_topologia() por não ter
-mais permissão "configure". A topologia precisa já existir (ver
-scripts/provisionar_topologia.py).
-"""
 import json
 from datetime import datetime, timezone
 

@@ -1,37 +1,3 @@
-"""
-Versão "rodando continuamente" do consumidor de convites e lembretes
-(Etapa 2.a do trabalho: processo novo, separado do servidor principal,
-rodando pra sempre). Feito pra rodar numa VM própria (Oracle Cloud
-Always Free), nunca no Render -- o free tier de lá não sustenta
-processo contínuo.
-
-Diferença pro workers/consumidor_convites.py (que continua existindo,
-sem mexer): aquele lá faz "drena um lote e sai", chamado por HTTP por
-um cron externo, e só lê a fila principal (convites). Esse aqui roda
-pra sempre e lê DUAS filas -- primeiro a de prioridade
-(FILA_PRIORITARIA, lembretes), depois a principal (FILA_PRINCIPAL,
-convites) -- sempre nessa ordem, a cada volta do loop, pra um lembrete
-nunca ficar esperando atrás de uma leva grande de convites.
-
-Duas filas, dois "tipos" de mensagem: o campo `tipo` no corpo da
-mensagem ("convite", "lembrete_1" ou "lembrete_2") diz qual e-mail
-montar e qual campo marcar em token_resposta. Mensagem sem `tipo`
-(formato antigo) é tratada como "convite", pra não quebrar nada que
-já estivesse na fila antes dessa mudança.
-
-Se a conexão cair (rede, restart do broker, etc.), reconecta sozinho
-e continua de onde parou, sem precisar de nada externo chamando ele
-de novo.
-
-Autorização por papel (Etapa 3): conecta com RABBITMQ_URL_CONSUMIDOR,
-não mais com a credencial admin -- essa credencial só consegue ler
-fila.* e publicar na exchange default (usada pra mandar pra DLQ), não
-consegue declarar/apagar nada nem publicar na exchange principal. Por
-isso este worker NÃO chama mais declarar_topologia() -- a topologia
-já precisa existir de antes (ver scripts/provisionar_topologia.py). Se
-a fila ainda não existir, a conexão falha com um erro claro do broker
-em vez de tentar (e falhar) criar a fila sozinha.
-"""
 import json
 import time
 from datetime import datetime, timezone
