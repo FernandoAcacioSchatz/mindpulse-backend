@@ -1,4 +1,5 @@
 import json
+import threading
 import time
 
 import pika
@@ -23,13 +24,34 @@ MAX_TENTATIVAS_PUBLICACAO = 3
 ESPERA_ENTRE_TENTATIVAS_S = 0.5
 
 
+# Cada pika.URLParameters("amqps://...") cria um ssl.SSLContext novo, que carrega o
+# bundle inteiro de certificados CA (~0,9 MB de memória nativa). Como a conexão
+# (BlockingConnection) forma ciclos de referência, esse contexto só é liberado pelo
+# coletor de ciclos do Python, que não enxerga memória nativa e quase não roda num
+# processo com heap grande (sklearn/pandas). Criar os parâmetros a cada chamada
+# (cron de 3 em 3 minutos) vazava ~0,9 MB por execução até estourar os 512 MB do
+# Render. Os parâmetros são imutáveis na prática, então um por URL basta.
+_PARAMETROS_POR_URL: dict[str, pika.URLParameters] = {}
+_PARAMETROS_LOCK = threading.Lock()
+
+
+def _parametros(url: str) -> pika.URLParameters:
+    parametros = _PARAMETROS_POR_URL.get(url)
+    if parametros is None:
+        with _PARAMETROS_LOCK:
+            parametros = _PARAMETROS_POR_URL.get(url)
+            if parametros is None:
+                parametros = pika.URLParameters(url)
+                _PARAMETROS_POR_URL[url] = parametros
+    return parametros
+
+
 def _conectar(url: str, nome_credencial: str) -> pika.BlockingConnection:
     if not url:
         raise RuntimeError(
             f"{nome_credencial} não configurada no ambiente. Ver RABBITMQ_AUTORIZACAO.md."
         )
-    parametros = pika.URLParameters(url)
-    return pika.BlockingConnection(parametros)
+    return pika.BlockingConnection(_parametros(url))
 
 
 def conectar_admin() -> pika.BlockingConnection:
